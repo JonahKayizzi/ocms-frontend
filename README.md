@@ -1,46 +1,151 @@
-# Getting Started with Create React App
+# OCMS Frontend - Online Courses & Assessments Management System
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A React TypeScript frontend application for managing online courses, assessments, modules, lessons, and materials.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- **Course Management**: Create, edit, publish, and manage courses with start/end dates
+- **Module Organization**: Organize course content into modules
+- **Rich Text Lessons**: Create lessons with rich text content and video support
+- **Assessment System**: Build course-based and standalone assessments with questions
+- **Material Management**: Upload and manage course materials
+- **Status Tracking**: Track course status (Draft, Published, Completed, Deactivated)
+- **Responsive Design**: Mobile-friendly interface built with Tailwind CSS
 
-### `npm start`
+## Tech Stack
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+- **React 19** with TypeScript
+- **Redux Toolkit Query** for API state management
+- **React Router** for navigation
+- **Tailwind CSS** for styling
+- **Lucide React** for icons
+- **React Quill** for rich text editing
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## Getting Started
 
-### `npm test`
+### Prerequisites
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- Node.js 16+ 
+- npm or yarn
+- OCMS Backend running on port 8091
 
-### `npm run build`
+### Installation
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+1. Install dependencies:
+```bash
+npm install
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+2. Start the development server:
+```bash
+npm start
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+The application will open at [http://localhost:3000](http://localhost:3000).
 
-### `npm run eject`
+### Building for Production
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+```bash
+npm run build
+```
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+This creates a `build` folder with optimized production files.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+## Project Structure
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+```
+src/
+├── components/          # Reusable UI components
+│   ├── CourseCard.tsx
+│   └── CourseForm.tsx
+├── pages/              # Page components
+│   ├── HomePage.tsx
+│   ├── CourseManagementPage.tsx
+│   └── CourseDetailPage.tsx
+├── redux/              # Redux store and API slice
+│   ├── store.ts
+│   └── apiSlice.ts
+├── types/              # TypeScript type definitions
+│   └── index.ts
+├── utils/              # Utility functions
+├── App.tsx             # Main app component
+└── index.tsx           # Entry point
+```
 
-## Learn More
+## API Integration
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+The frontend communicates with the OCMS Backend API running on `http://localhost:8091`. All API calls are managed through Redux Toolkit Query for efficient caching and state management.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### Key Endpoints
+
+- **Courses**: `/courses`, `/courses/published`, `/courses/completed`
+- **Modules**: `/modules/course/{courseId}`
+- **Lessons**: `/course-lessons/course/{courseId}`
+- **Assessments**: `/assessments/course/{courseId}`, `/assessments/standalone`
+- **Questions**: `/assessment-questions/assessment/{assessmentId}`
+- **Materials**: `/course-materials/course/{courseId}`
+
+## Authentication
+
+Currently, the app uses JWT tokens stored in localStorage. The token is automatically attached to API requests through the base query configuration.
+
+## Features Overview
+
+### Home Page
+- Displays published and completed courses
+- Course cards with status badges
+- Navigation to admin panel
+
+### Course Management
+- List all courses with status indicators
+- Create new courses with rich form
+- Edit existing courses
+- Course statistics dashboard
+
+### Course Details
+- View course information and timeline
+- Browse modules and lessons
+- Course content organization
+
+## Development
+
+### Available Scripts
+
+- `npm start` - Start development server
+- `npm build` - Build for production
+- `npm test` - Run tests
+- `npm eject` - Eject from Create React App
+
+### Code Style
+
+The project uses ESLint for code quality and Prettier for formatting. TypeScript provides type safety throughout the application.
+
+## Deployment
+
+The built application can be deployed to any static hosting service:
+
+- **Vercel**: `vercel --prod`
+- **Netlify**: Connect to Git repository
+- **AWS S3**: Upload build folder
+- **GitHub Pages**: Use `gh-pages` package
+
+## Environment Variables
+
+Create a `.env` file in the root directory:
+
+```env
+REACT_APP_API_URL=http://localhost:8091
+REACT_APP_ENVIRONMENT=development
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+This project is part of the SMS Migration system.

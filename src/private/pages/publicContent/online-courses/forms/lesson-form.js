@@ -1,0 +1,150 @@
+import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
+import RichTextEditor from '../../../../components/FormsElements/RickTextEditor';
+
+export default function LessonForm({
+  lesson, onSave, onCancel, courseId, modules,
+}) {
+  const [name, setName] = useState(lesson?.name || '');
+  const [description, setDescription] = useState(lesson?.description || '');
+  const [loomVideoUrl, setLoomVideoUrl] = useState(lesson?.loomVideoUrl || '');
+  const [content, setContent] = useState(lesson?.content || '');
+
+  useEffect(() => {
+    if (lesson) {
+      setName(lesson.name);
+      setDescription(lesson.description);
+      setLoomVideoUrl(lesson.loomVideoUrl || '');
+      setContent(lesson.content || '');
+    } else {
+      setName('');
+      setDescription('');
+      setLoomVideoUrl('');
+      setContent('');
+    }
+  }, [lesson]);
+
+  const [moduleId, setModuleId] = useState(lesson?.moduleId || '');
+
+  const handleSave = () => {
+    onSave({
+      id: lesson?.id,
+      name,
+      description,
+      content,
+      loomVideoUrl,
+      moduleId: moduleId || null,
+      courseId, // Ensure courseId is passed
+    });
+  };
+
+  const cardClass = 'bg-white rounded-lg shadow p-6';
+  const cardHeaderClass = 'mb-4';
+  const cardTitleClass = 'text-2xl font-bold text-gray-800';
+  const cardDescriptionClass = 'text-gray-600 mt-1';
+  const formGroupClass = 'grid gap-2';
+  const labelClass = 'block text-sm font-medium text-gray-700';
+  const inputClass = 'mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm';
+  const buttonGroupClass = 'flex justify-end gap-2 mt-6';
+  const primaryButtonClass = 'px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200';
+  const ghostButtonClass = 'px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200';
+
+  return (
+    <div className={cardClass}>
+      <div className={cardHeaderClass}>
+        <h2 className={cardTitleClass}>{lesson ? 'Edit Lesson' : 'Create New Lesson'}</h2>
+        <p className={cardDescriptionClass}>
+          Define the lesson&apos;s name, description, and optional Loom video URL.
+        </p>
+      </div>
+      <div className="grid gap-6">
+        <div className={formGroupClass}>
+          <span htmlFor="lesson-name" className={labelClass}>Lesson Name</span>
+          <input
+            id="lesson-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., What is Safety?"
+            className={inputClass}
+          />
+        </div>
+        <div className={formGroupClass}>
+          <span htmlFor="module-select" className={labelClass}>Attach to Module</span>
+          <select
+            id="module-select"
+            value={moduleId}
+            onChange={(e) => setModuleId(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">-- Optional: choose module --</option>
+            {(modules || []).map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className={formGroupClass}>
+          <RichTextEditor
+            label="Lesson Content (shown if no video provided)"
+            name="lesson-content"
+            value={content}
+            onChange={setContent}
+          />
+        </div>
+        <div className={formGroupClass}>
+          <span htmlFor="lesson-description" className={labelClass}>Description</span>
+          <textarea
+            id="lesson-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Brief description of the lesson content"
+            className={`${inputClass} min-h-[80px]`}
+          />
+        </div>
+        <div className={formGroupClass}>
+          <span htmlFor="loom-video-url" className={labelClass}>Loom Video URL (Optional)</span>
+          <input
+            id="loom-video-url"
+            type="url"
+            value={loomVideoUrl}
+            onChange={(e) => setLoomVideoUrl(e.target.value)}
+            placeholder="e.g., https://www.loom.com/share/your-video-id"
+            className={inputClass}
+          />
+          <p className="text-sm text-gray-500">
+            Provide a Loom video share link for this lesson.
+          </p>
+        </div>
+        <div className={buttonGroupClass}>
+          <button type="button" className={ghostButtonClass} onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="button" className={primaryButtonClass} onClick={handleSave}>
+            Save Lesson
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+LessonForm.propTypes = {
+  lesson: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    name: PropTypes.string,
+    description: PropTypes.string,
+    loomVideoUrl: PropTypes.string,
+    content: PropTypes.string,
+    moduleId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  }).isRequired,
+  onSave: PropTypes.func.isRequired,
+  onCancel: PropTypes.func.isRequired,
+  courseId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  modules: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+      name: PropTypes.string.isRequired,
+    }),
+  ).isRequired,
+};
