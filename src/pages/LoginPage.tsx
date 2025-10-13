@@ -3,7 +3,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { encrypt } from '../encryption/Encryption';
 import { storeToken, getToken } from '../utils/jwtUtils';
 
-export default function LoginPage() {
+interface LoginPageProps {
+    redirect?: string;
+    onSuccess?: () => void;
+}
+
+export default function LoginPage({ redirect, onSuccess }: LoginPageProps = {}) {
     const navigate = useNavigate();
     const location = useLocation() as { state?: { warning?: string; success?: string } };
     const [username, setUsername] = useState('');
@@ -49,7 +54,13 @@ export default function LoginPage() {
 
             if (token) {
                 storeToken(token);
-                navigate('/admin', { state: { success: 'You are logged in.' } });
+                if (onSuccess) {
+                    onSuccess();
+                } else if (redirect) {
+                    navigate(redirect, { state: { success: 'You are logged in.' } });
+                } else {
+                    navigate('/admin', { state: { success: 'You are logged in.' } });
+                }
                 return;
             }
 
@@ -57,7 +68,13 @@ export default function LoginPage() {
             const user = { username, roles: ['USER'], provider } as any;
             localStorage.setItem('ans-sms', JSON.stringify(user));
             sessionStorage.setItem('ans-sms', encrypt(user));
-            navigate('/admin', { state: { success: 'You are logged in (demo mode).' } });
+            if (onSuccess) {
+                onSuccess();
+            } else if (redirect) {
+                navigate(redirect, { state: { success: 'You are logged in (demo mode).' } });
+            } else {
+                navigate('/admin', { state: { success: 'You are logged in (demo mode).' } });
+            }
         } catch (err) {
             setError('Login failed');
         } finally {

@@ -35,7 +35,7 @@ const baseQuery = fetchBaseQuery({
 export const apiSlice = createApi({
     reducerPath: 'api',
     baseQuery,
-    tagTypes: ['Course', 'Module', 'CourseLesson', 'CourseAssessment', 'AssessmentQuestion', 'QuestionOption', 'CourseMaterial'],
+    tagTypes: ['Course', 'Module', 'CourseLesson', 'CourseAssessment', 'AssessmentQuestion', 'QuestionOption', 'CourseMaterial', 'Enrollment', 'Progress'],
     endpoints: (builder) => ({
         // Course endpoints
         getCourses: builder.query<Course[], void>({
@@ -303,6 +303,34 @@ export const apiSlice = createApi({
             }),
             invalidatesTags: ['CourseMaterial'],
         }),
+
+        // Enrollment & Progress endpoints
+        enroll: builder.mutation<{ id: number }, { courseId: number; participantId: string }>({
+            query: ({ courseId, participantId }) => ({
+                url: `/enrollments/course/${courseId}?participantId=${encodeURIComponent(participantId)}`,
+                method: 'POST',
+            }),
+            invalidatesTags: ['Enrollment'],
+        }),
+        isEnrolled: builder.query<{ enrolled: boolean }, { courseId: number; participantId: string }>({
+            query: ({ courseId, participantId }) => `/enrollments/course/${courseId}/is-enrolled?participantId=${encodeURIComponent(participantId)}`,
+            providesTags: ['Enrollment'],
+        }),
+        getEnrollmentCount: builder.query<{ count: number }, number>({
+            query: (courseId) => `/enrollments/course/${courseId}/count`,
+            providesTags: ['Enrollment'],
+        }),
+        setLessonCompleted: builder.mutation<any, { lessonId: number; participantId: string; completed: boolean }>({
+            query: ({ lessonId, participantId, completed }) => ({
+                url: `/participant-progress/lesson/${lessonId}?participantId=${encodeURIComponent(participantId)}&completed=${completed}`,
+                method: 'POST',
+            }),
+            invalidatesTags: ['Progress'],
+        }),
+        getCourseProgress: builder.query<{ completed: number; total: number; percent: number }, { courseId: number; participantId: string }>({
+            query: ({ courseId, participantId }) => `/participant-progress/course/${courseId}/percent?participantId=${encodeURIComponent(participantId)}`,
+            providesTags: ['Progress'],
+        }),
     }),
 });
 
@@ -357,4 +385,11 @@ export const {
     useUploadMaterialMutation,
     useUpdateMaterialMutation,
     useDeleteMaterialMutation,
+
+    // Enrollment & Progress hooks
+    useEnrollMutation,
+    useIsEnrolledQuery,
+    useGetEnrollmentCountQuery,
+    useSetLessonCompletedMutation,
+    useGetCourseProgressQuery,
 } = apiSlice;
