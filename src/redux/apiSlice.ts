@@ -35,7 +35,7 @@ const baseQuery = fetchBaseQuery({
 export const apiSlice = createApi({
     reducerPath: 'api',
     baseQuery,
-    tagTypes: ['Course', 'Module', 'CourseLesson', 'CourseAssessment', 'AssessmentQuestion', 'QuestionOption', 'CourseMaterial'],
+    tagTypes: ['Course', 'Module', 'CourseLesson', 'CourseAssessment', 'AssessmentQuestion', 'QuestionOption', 'CourseMaterial', 'Enrollment', 'Progress'],
     endpoints: (builder) => ({
         // Course endpoints
         getCourses: builder.query<Course[], void>({
@@ -177,6 +177,10 @@ export const apiSlice = createApi({
             query: () => '/assessments/standalone',
             providesTags: ['CourseAssessment'],
         }),
+        getAssessmentById: builder.query<CourseAssessment, number>({
+            query: (id) => `/assessments/${id}`,
+            providesTags: (result, error, id) => [{ type: 'CourseAssessment', id }],
+        }),
         createAssessment: builder.mutation<CourseAssessment, AssessmentFormData & { course?: { id: number } }>({
             query: (assessment) => ({
                 url: '/assessments',
@@ -191,7 +195,10 @@ export const apiSlice = createApi({
                 method: 'PUT',
                 body: updates,
             }),
-            invalidatesTags: (result, error, { id }) => [{ type: 'CourseAssessment', id }],
+            invalidatesTags: (result, error, { id }) => [
+                { type: 'CourseAssessment', id },
+                'CourseAssessment', // Invalidate all assessment lists
+            ],
         }),
         deleteAssessment: builder.mutation<string, number>({
             query: (id) => ({
@@ -205,6 +212,13 @@ export const apiSlice = createApi({
         getQuestionsByAssessment: builder.query<AssessmentQuestion[], number>({
             query: (assessmentId) => `/assessment-questions/assessment/${assessmentId}`,
             providesTags: (result, error, assessmentId) => [{ type: 'AssessmentQuestion', assessmentId }],
+        }),
+        getRandomQuestionsByAssessment: builder.query<AssessmentQuestion[], { assessmentId: number; questionsToPresent?: number }>({
+            query: ({ assessmentId, questionsToPresent }) => ({
+                url: `/assessment-questions/assessment/${assessmentId}/random`,
+                params: questionsToPresent ? { questionsToPresent } : {},
+            }),
+            providesTags: (result, error, { assessmentId }) => [{ type: 'AssessmentQuestion', assessmentId }],
         }),
         createQuestion: builder.mutation<AssessmentQuestion, QuestionFormData & { assessment: { id: number } }>({
             query: (question) => ({
@@ -243,8 +257,8 @@ export const apiSlice = createApi({
             }),
             invalidatesTags: ['QuestionOption'],
         }),
-        createBulkOptions: builder.mutation<{ message: string }, { optionText: string; question: { id: number } }[]>({
-            query: (options) => ({
+        createBulkOptions: builder.mutation<any[], { options: { optionText: string; question: { id: number } }[] }>({
+            query: ({ options }) => ({
                 url: '/question-options/bulk',
                 method: 'POST',
                 body: options,
@@ -303,6 +317,34 @@ export const apiSlice = createApi({
             }),
             invalidatesTags: ['CourseMaterial'],
         }),
+
+        // Enrollment & Progress endpoints
+        enroll: builder.mutation<{ id: number }, { courseId: number; participantId: string }>({
+            query: ({ courseId, participantId }) => ({
+                url: `/enrollments/course/${courseId}?participantId=${encodeURIComponent(participantId)}`,
+                method: 'POST',
+            }),
+            invalidatesTags: ['Enrollment'],
+        }),
+        isEnrolled: builder.query<{ enrolled: boolean }, { courseId: number; participantId: string }>({
+            query: ({ courseId, participantId }) => `/enrollments/course/${courseId}/is-enrolled?participantId=${encodeURIComponent(participantId)}`,
+            providesTags: ['Enrollment'],
+        }),
+        getEnrollmentCount: builder.query<{ count: number }, number>({
+            query: (courseId) => `/enrollments/course/${courseId}/count`,
+            providesTags: ['Enrollment'],
+        }),
+        setLessonCompleted: builder.mutation<any, { lessonId: number; participantId: string; completed: boolean }>({
+            query: ({ lessonId, participantId, completed }) => ({
+                url: `/participant-progress/lesson/${lessonId}?participantId=${encodeURIComponent(participantId)}&completed=${completed}`,
+                method: 'POST',
+            }),
+            invalidatesTags: ['Progress'],
+        }),
+        getCourseProgress: builder.query<{ completed: number; total: number; percent: number }, { courseId: number; participantId: string }>({
+            query: ({ courseId, participantId }) => `/participant-progress/course/${courseId}/percent?participantId=${encodeURIComponent(participantId)}`,
+            providesTags: ['Progress'],
+        }),
     }),
 });
 
@@ -334,12 +376,14 @@ export const {
     // Assessment hooks
     useGetAssessmentsByCourseQuery,
     useGetStandaloneAssessmentsQuery,
+    useGetAssessmentByIdQuery,
     useCreateAssessmentMutation,
     useUpdateAssessmentMutation,
     useDeleteAssessmentMutation,
 
     // Question hooks
     useGetQuestionsByAssessmentQuery,
+    useGetRandomQuestionsByAssessmentQuery,
     useCreateQuestionMutation,
     useUpdateQuestionMutation,
     useDeleteQuestionMutation,
@@ -357,4 +401,11 @@ export const {
     useUploadMaterialMutation,
     useUpdateMaterialMutation,
     useDeleteMaterialMutation,
+
+    // Enrollment & Progress hooks
+    useEnrollMutation,
+    useIsEnrolledQuery,
+    useGetEnrollmentCountQuery,
+    useSetLessonCompletedMutation,
+    useGetCourseProgressQuery,
 } = apiSlice;

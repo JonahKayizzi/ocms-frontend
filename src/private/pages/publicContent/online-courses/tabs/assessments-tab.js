@@ -59,15 +59,11 @@ export default function AssessmentsTab({
     await deleteAssessment(id);
   };
 
-  const handleSaveAssessment = async (newAssessment) => {
-    if (newAssessment?.id) {
-      await updateAssessment({ id: newAssessment.id, updates: newAssessment });
-    } else {
-      const payload = { ...newAssessment };
-      if (courseId) payload.course = { id: courseId };
-      await createAssessment(payload);
-    }
+  const handleSaveAssessment = async (savedAssessment) => {
+    // The AssessmentForm already handles the API call and returns the saved assessment
+    // We just need to close the form - the cache will be invalidated automatically
     setShowForm(false);
+    setEditingAssessment(null);
   };
 
   const handleCancelForm = () => {

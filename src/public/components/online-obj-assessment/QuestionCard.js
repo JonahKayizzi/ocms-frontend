@@ -8,7 +8,9 @@ export default function QuestionCard({
   selectedAnswer,
   onAnswerSelect,
   onNext,
+  onPrevious,
   isLastQuestion,
+  showPrevious,
 }) {
   return (
     <div className="bg-white rounded-lg shadow-lg">
@@ -21,6 +23,20 @@ export default function QuestionCard({
         </p>
       </div>
       <div className="p-6">
+        {/* Display image if available */}
+        {question.imageDataUrl && question.imageDataUrl.trim() !== '' && (
+          <div className="mb-6 flex justify-center">
+            <img
+              src={question.imageDataUrl}
+              alt="Question illustration"
+              className="max-w-full h-auto max-h-96 rounded-lg shadow-md"
+              onError={(e) => {
+                console.error('Failed to load image:', question.imageDataUrl);
+                e.target.style.display = 'none';
+              }}
+            />
+          </div>
+        )}
         <div className="space-y-3">
           {question.options.map((option, index) => (
             <AnswerOption
@@ -40,7 +56,17 @@ export default function QuestionCard({
               ? 'Answer selected'
               : 'Please select an answer'}
           </div>
-          <button
+          <div className="flex items-center gap-3">
+            {showPrevious && (
+              <button
+                type="button"
+                onClick={onPrevious}
+                className="px-4 py-2 font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2"
+              >
+                Previous
+              </button>
+            )}
+            <button
             type="button"
             onClick={onNext}
             disabled={selectedAnswer === null}
@@ -51,7 +77,8 @@ export default function QuestionCard({
             }`}
           >
             {isLastQuestion ? 'Submit Quiz' : 'Next Question'}
-          </button>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -63,13 +90,18 @@ QuestionCard.propTypes = {
     question: PropTypes.string.isRequired,
     options: PropTypes.arrayOf(PropTypes.string).isRequired,
     correctAnswer: PropTypes.number.isRequired,
+    imageDataUrl: PropTypes.string,
   }).isRequired,
   selectedAnswer: PropTypes.number,
   onAnswerSelect: PropTypes.func.isRequired,
   onNext: PropTypes.func.isRequired,
+  onPrevious: PropTypes.func,
   isLastQuestion: PropTypes.bool.isRequired,
+  showPrevious: PropTypes.bool,
 };
 
 QuestionCard.defaultProps = {
   selectedAnswer: null,
+  onPrevious: undefined,
+  showPrevious: false,
 };
