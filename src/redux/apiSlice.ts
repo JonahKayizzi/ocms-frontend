@@ -177,6 +177,10 @@ export const apiSlice = createApi({
             query: () => '/assessments/standalone',
             providesTags: ['CourseAssessment'],
         }),
+        getAssessmentById: builder.query<CourseAssessment, number>({
+            query: (id) => `/assessments/${id}`,
+            providesTags: (result, error, id) => [{ type: 'CourseAssessment', id }],
+        }),
         createAssessment: builder.mutation<CourseAssessment, AssessmentFormData & { course?: { id: number } }>({
             query: (assessment) => ({
                 url: '/assessments',
@@ -191,7 +195,10 @@ export const apiSlice = createApi({
                 method: 'PUT',
                 body: updates,
             }),
-            invalidatesTags: (result, error, { id }) => [{ type: 'CourseAssessment', id }],
+            invalidatesTags: (result, error, { id }) => [
+                { type: 'CourseAssessment', id },
+                'CourseAssessment', // Invalidate all assessment lists
+            ],
         }),
         deleteAssessment: builder.mutation<string, number>({
             query: (id) => ({
@@ -205,6 +212,13 @@ export const apiSlice = createApi({
         getQuestionsByAssessment: builder.query<AssessmentQuestion[], number>({
             query: (assessmentId) => `/assessment-questions/assessment/${assessmentId}`,
             providesTags: (result, error, assessmentId) => [{ type: 'AssessmentQuestion', assessmentId }],
+        }),
+        getRandomQuestionsByAssessment: builder.query<AssessmentQuestion[], { assessmentId: number; questionsToPresent?: number }>({
+            query: ({ assessmentId, questionsToPresent }) => ({
+                url: `/assessment-questions/assessment/${assessmentId}/random`,
+                params: questionsToPresent ? { questionsToPresent } : {},
+            }),
+            providesTags: (result, error, { assessmentId }) => [{ type: 'AssessmentQuestion', assessmentId }],
         }),
         createQuestion: builder.mutation<AssessmentQuestion, QuestionFormData & { assessment: { id: number } }>({
             query: (question) => ({
@@ -243,8 +257,8 @@ export const apiSlice = createApi({
             }),
             invalidatesTags: ['QuestionOption'],
         }),
-        createBulkOptions: builder.mutation<{ message: string }, { optionText: string; question: { id: number } }[]>({
-            query: (options) => ({
+        createBulkOptions: builder.mutation<any[], { options: { optionText: string; question: { id: number } }[] }>({
+            query: ({ options }) => ({
                 url: '/question-options/bulk',
                 method: 'POST',
                 body: options,
@@ -362,12 +376,14 @@ export const {
     // Assessment hooks
     useGetAssessmentsByCourseQuery,
     useGetStandaloneAssessmentsQuery,
+    useGetAssessmentByIdQuery,
     useCreateAssessmentMutation,
     useUpdateAssessmentMutation,
     useDeleteAssessmentMutation,
 
     // Question hooks
     useGetQuestionsByAssessmentQuery,
+    useGetRandomQuestionsByAssessmentQuery,
     useCreateQuestionMutation,
     useUpdateQuestionMutation,
     useDeleteQuestionMutation,

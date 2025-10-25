@@ -43,6 +43,10 @@ export interface CourseAssessment {
     questionsToPresent: number;
     questionCount: number;
     courseId?: number;
+    showAnswers: boolean;
+    maxRetries: number;
+    timingMode: 'none' | 'quiz' | 'question';
+    timeLimit: number; // in minutes for quiz mode, seconds for question mode
     status: number;
     createdAt: string;
     updatedAt: string;
@@ -52,7 +56,7 @@ export interface CourseAssessment {
 export interface AssessmentQuestion {
     id: number;
     text: string;
-    correctAnswer: string;
+    // correctOptionId removed - now using is_correct in QuestionOption
     optionsToPresent: number;
     imageDataUrl: string;
     assessmentId: number;
@@ -65,6 +69,7 @@ export interface QuestionOption {
     id: number;
     optionText: string;
     questionId: number;
+    isCorrect: boolean;
     createdAt: string;
     updatedAt: string;
 }
@@ -119,12 +124,16 @@ export interface AssessmentFormData {
     description: string;
     questionsToPresent: number;
     questionCount: number;
+    showAnswers: boolean;
+    maxRetries: number;
+    timingMode: 'none' | 'quiz' | 'question';
+    timeLimit: number;
     courseId?: number;
 }
 
 export interface QuestionFormData {
     text: string;
-    correctAnswer: string;
+    // correctOptionId removed - now using is_correct in QuestionOption
     optionsToPresent: number;
     imageDataUrl: string;
     assessmentId: number;
