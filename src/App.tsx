@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { store } from "./redux/store";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import HomePage from "./pages/HomePage";
+import UserDashboard from "./pages/UserDashboard";
 import CourseManagementDashboard from "./private/pages/publicContent/online-courses/course-management-dashboard";
 import CourseDetailPage from "./pages/CourseDetailPage";
 import LoginPage from "./pages/LoginPage";
@@ -25,6 +26,7 @@ function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/dashboard" element={<UserDashboard />} />
               <Route path="/admin" element={<CourseManagementDashboard />} />
               {/* Legacy aliases for admin dashboard */}
               <Route
