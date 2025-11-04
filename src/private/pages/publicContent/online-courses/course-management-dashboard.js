@@ -1,7 +1,8 @@
 /* eslint-disable no-lonely-if */
 import React, { useState, useEffect } from 'react';
-import { Menu, BookOpen, LogOut, User } from 'lucide-react'; // For mobile menu icon and course icon
+import { Menu, BookOpen, LogOut, User, Sun, Moon } from 'lucide-react'; // For mobile menu icon and course icon
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../../../../contexts/ThemeContext';
 import {
   useGetCoursesQuery,
   useCreateCourseMutation,
@@ -21,6 +22,7 @@ import { getToken, getUserInfo, removeToken, isTokenExpired } from '../../../../
 
 export default function CourseManagementDashboard() {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); // For desktop collapse
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false); // For mobile menu open
   const [currentUser, setCurrentUser] = useState(null);
@@ -416,7 +418,7 @@ export default function CourseManagementDashboard() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100 dark:bg-slate-900">
       {/* Mobile Sidebar Overlay */}
       {isMobileSidebarOpen && (
         <button
@@ -448,27 +450,27 @@ export default function CourseManagementDashboard() {
         md:w-[calc(100%-4rem)] md:group-[.sidebar-collapsed]:w-[calc(100%-16rem)] // Adjust width for desktop
       `}
       >
-        <div className="flex items-center justify-between mb-6 bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+        <div className="flex items-center justify-between mb-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-4 border border-gray-200 dark:border-slate-700">
           <div className="flex items-center space-x-4">
             {/* Toggle button for mobile sidebar */}
             <button
               type="button"
               onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-              className="p-2 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 md:hidden"
+              className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 md:hidden"
               aria-label="Toggle Mobile Sidebar"
             >
-              <Menu className="h-6 w-6 text-gray-600" />
+              <Menu className="h-6 w-6 text-gray-600 dark:text-gray-300" />
             </button>
             {/* Toggle button for desktop sidebar collapse */}
             <button
               type="button"
               onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-              className="p-2 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 hidden md:block"
+              className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 hidden md:block"
               aria-label="Toggle Desktop Sidebar"
             >
-              <Menu className="h-6 w-6 text-gray-600" />
+              <Menu className="h-6 w-6 text-gray-600 dark:text-gray-300" />
             </button>
-            <h1 className="text-2xl font-bold text-gray-800">
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
               {currentView === 'dashboard' && 'Admin Dashboard'}
               {currentView === 'create-course' && 'Create New Course'}
               {currentView === 'course-management' && (selectedCourse ? `Course Management: ${selectedCourse.name}` : 'Course Management')}
@@ -477,30 +479,43 @@ export default function CourseManagementDashboard() {
             </h1>
           </div>
 
-          {/* User info and logout */}
-          {currentUser && (
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-200">
-                <User className="h-4 w-4 text-blue-600" />
-                <span className="text-sm font-medium text-gray-800">
-                  {currentUser.username}
-                </span>
-                {currentUser.isAdmin && (
-                  <span className="ml-2 px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full">
-                    Admin
+          {/* Theme toggle, User info and logout */}
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={toggleTheme}
+              className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-all duration-300 border border-sky-200 dark:border-sky-500/20"
+              aria-label="Toggle theme"
+            >
+              {theme === "dark" ? (
+                <Sun className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
+              ) : (
+                <Moon className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+              )}
+            </button>
+            {currentUser && (
+              <>
+                <div className="flex items-center space-x-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+                  <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                    {currentUser.username}
                   </span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="text-sm font-medium">Logout</span>
-              </button>
-            </div>
-          )}
+                  {currentUser.isAdmin && (
+                    <span className="ml-2 px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full">
+                      Admin
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span className="text-sm font-medium">Logout</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {contentToRender}

@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import React, { useState, useMemo } from 'react';
 // Import via absolute path within src to satisfy CRA restriction
 import { useGetCourseByIdQuery, useGetModulesByCourseQuery, useGetLessonsByCourseQuery, useGetMaterialsByCourseQuery, useGetAssessmentsByCourseQuery, useGetEnrollmentCountQuery, useIsEnrolledQuery, useEnrollMutation, useSetLessonCompletedMutation, useGetCourseProgressQuery } from '../../../redux/apiSlice';
-import { getToken, getUsernameFromToken } from '../../../utils/jwtUtils';
+import { getToken, getUsernameFromToken, removeToken } from '../../../utils/jwtUtils';
 import CourseHeader from './course-header';
 import VideoSection from './video-section';
 import CourseDescription from './course-description';
@@ -106,6 +106,11 @@ export default function CoursePage() {
     setShowLoginModal(true);
   };
 
+  const handleLogout = () => {
+    removeToken();
+    window.location.href = '/';
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <CourseHeader
@@ -118,6 +123,7 @@ export default function CoursePage() {
         isEnrolled={isEnrolled}
         onEnrollClick={handleEnroll}
         onLoginClick={handleLoginClick}
+        onLogoutClick={handleLogout}
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -169,8 +175,16 @@ export default function CoursePage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            <AssessmentCard assessments={assessments} />
-            <DownloadableMaterials materials={showContent ? downloadableMaterials : []} />
+            <AssessmentCard
+              assessments={assessments}
+              isEnrolled={isEnrolled}
+              canTake={isEnrolled && progress.completion === 100}
+            />
+            <DownloadableMaterials
+              materials={downloadableMaterials}
+              isEnrolled={isEnrolled}
+              onEnrollClick={username ? handleEnroll : handleLoginClick}
+            />
             <ProgressCard
               completion={progress.completion}
               lessonsCompleted={progress.lessonsCompleted}

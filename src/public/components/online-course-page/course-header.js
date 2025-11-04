@@ -1,10 +1,10 @@
 import {
-  Clock, Users, Plane, ArrowLeft, User, CheckCircle,
+  Clock, Users, Plane, ArrowLeft, User, CheckCircle, LogOut,
 } from 'lucide-react';
 import PropTypes from 'prop-types';
 
 export default function CourseHeader({
-  title, subtitle, duration, students, endDate, username, isEnrolled, onEnrollClick, onLoginClick,
+  title, subtitle, duration, students, endDate, username, isEnrolled, onEnrollClick, onLoginClick, onLogoutClick,
 }) {
   return (
     <div className="bg-white border-b border-gray-200">
@@ -45,9 +45,6 @@ export default function CourseHeader({
 
           {/* Course Actions */}
           <div className="flex items-center space-x-3">
-            <button type="button" className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-              Share Course
-            </button>
             {!username && (
               <button 
                 type="button" 
@@ -73,10 +70,21 @@ export default function CourseHeader({
               </div>
             )}
             {username && (
-              <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 rounded-lg">
-                <User className="h-4 w-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">{username}</span>
-              </div>
+              <>
+                <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 rounded-lg">
+                  <User className="h-4 w-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">{username}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={onLogoutClick}
+                  className="flex items-center space-x-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                  title="Logout"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span className="text-sm font-medium">Logout</span>
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -95,6 +103,7 @@ CourseHeader.propTypes = {
   isEnrolled: PropTypes.bool,
   onEnrollClick: PropTypes.func,
   onLoginClick: PropTypes.func,
+  onLogoutClick: PropTypes.func,
 };
 
 CourseHeader.defaultProps = {
@@ -103,4 +112,5 @@ CourseHeader.defaultProps = {
   isEnrolled: false,
   onEnrollClick: () => {},
   onLoginClick: () => {},
+  onLogoutClick: () => {},
 };

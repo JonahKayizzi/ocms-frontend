@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
-import { useGetAssessmentByIdQuery, useGetRandomQuestionsByAssessmentQuery } from '../../../redux/apiSlice';
+import { useState, useMemo, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Sun, Moon } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { useGetAssessmentByIdQuery, useGetRandomQuestionsByAssessmentQuery, useIsEnrolledQuery } from '../../../redux/apiSlice';
+import { getToken, getUsernameFromToken, isTokenExpired } from '../../../utils/jwtUtils';
 import useQuizLogic from '../hooks/useQuizLogic';
 import ProgressBar from './ProgressBar';
 import QuestionCard from './QuestionCard';
@@ -13,8 +16,15 @@ import Timer from './Timer';
 
 export default function QuizAssessment() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const assessmentId = Number(id);
   const [showIntroduction, setShowIntroduction] = useState(true);
+  const { theme, toggleTheme } = useTheme();
+
+  // Check authentication
+  const token = getToken();
+  const username = token ? getUsernameFromToken(token) : null;
+  const isAuthenticated = token && !isTokenExpired(token);
 
   // Fetch assessment data to get settings
   const { 
@@ -24,6 +34,30 @@ export default function QuizAssessment() {
   } = useGetAssessmentByIdQuery(assessmentId, { 
     skip: !assessmentId 
   });
+
+  // Check enrollment if assessment belongs to a course
+  const { data: enrollmentData } = useIsEnrolledQuery(
+    { courseId: assessment?.courseId, participantId: username || '' },
+    { skip: !assessment?.courseId || !username || !isAuthenticated }
+  );
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!assessmentLoading && !isAuthenticated) {
+      navigate('/login', { state: { warning: 'Please login to access assessments' } });
+    }
+  }, [assessmentLoading, isAuthenticated, navigate]);
+
+  // Redirect to course page if assessment belongs to a course and user is not enrolled
+  useEffect(() => {
+    if (assessment && assessment.courseId && isAuthenticated && enrollmentData !== undefined) {
+      if (!enrollmentData?.enrolled) {
+        navigate(`/course/${assessment.courseId}`, { 
+          state: { warning: 'Please enroll in the course to access this assessment' } 
+        });
+      }
+    }
+  }, [assessment, enrollmentData, isAuthenticated, navigate]);
 
   // Fetch random assessment questions from database
   const { 
@@ -143,10 +177,24 @@ export default function QuizAssessment() {
   // Show error if assessment not found
   if (assessmentError || questionsError || !assessment) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
+        {/* Theme Toggle */}
+        <div className="fixed top-4 right-4 z-50">
+          <button
+            onClick={toggleTheme}
+            className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-all duration-300 border border-sky-200 dark:border-sky-500/20"
+            aria-label="Toggle theme"
+          >
+            {theme === "dark" ? (
+              <Sun className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
+            ) : (
+              <Moon className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+            )}
+          </button>
+        </div>
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Assessment Not Found</h2>
-          <p className="text-gray-600 mb-4">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Assessment Not Found</h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
             The requested assessment could not be found or has no questions.
           </p>
           <button
@@ -163,56 +211,70 @@ export default function QuizAssessment() {
   // Show introduction screen
   if (showIntroduction) {
     return (
-      <div className="min-h-screen bg-gray-50 pt-16">
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 pt-16">
+        {/* Theme Toggle */}
+        <div className="fixed top-4 right-4 z-50">
+          <button
+            onClick={toggleTheme}
+            className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-all duration-300 border border-sky-200 dark:border-sky-500/20"
+            aria-label="Toggle theme"
+          >
+            {theme === "dark" ? (
+              <Sun className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
+            ) : (
+              <Moon className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+            )}
+          </button>
+        </div>
         <div className="max-w-4xl mx-auto p-6">
-          <div className="bg-white rounded-lg shadow-lg p-8">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-8">
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 mb-4">{assessment.name}</h1>
-              <p className="text-lg text-gray-600">{assessment.description}</p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">{assessment.name}</h1>
+              <p className="text-lg text-gray-600 dark:text-gray-300">{assessment.description}</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               {/* Quiz Information */}
-              <div className="bg-blue-50 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-blue-900 mb-4">Quiz Information</h3>
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-4">Quiz Information</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Questions to Attempt:</span>
-                    <span className="font-medium">{assessment.questionsToPresent}</span>
+                    <span className="text-gray-600 dark:text-gray-300">Questions to Attempt:</span>
+                    <span className="font-medium dark:text-white">{assessment.questionsToPresent}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Maximum Retries:</span>
-                    <span className="font-medium">{assessment.maxRetries}</span>
+                    <span className="text-gray-600 dark:text-gray-300">Maximum Retries:</span>
+                    <span className="font-medium dark:text-white">{assessment.maxRetries}</span>
                   </div>
                 </div>
               </div>
 
               {/* Timing Information */}
-              <div className="bg-green-50 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-green-900 mb-4">Timing</h3>
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-green-900 dark:text-green-300 mb-4">Timing</h3>
                 <div className="space-y-3">
                   {assessment.timingMode === 'none' && (
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Time Limit:</span>
-                      <span className="font-medium text-green-600">No Time Limit</span>
+                      <span className="text-gray-600 dark:text-gray-300">Time Limit:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">No Time Limit</span>
                     </div>
                   )}
                   {assessment.timingMode === 'quiz' && (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Time Limit:</span>
-                        <span className="font-medium text-orange-600">{assessment.timeLimit} minutes</span>
+                        <span className="text-gray-600 dark:text-gray-300">Time Limit:</span>
+                        <span className="font-medium text-orange-600 dark:text-orange-400">{assessment.timeLimit} minutes</span>
                       </div>
-                      <p className="text-sm text-gray-500">Entire quiz must be completed within this time</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Entire quiz must be completed within this time</p>
                     </>
                   )}
                   {assessment.timingMode === 'question' && (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Time per Question:</span>
-                        <span className="font-medium text-red-600">{assessment.timeLimit} seconds</span>
+                        <span className="text-gray-600 dark:text-gray-300">Time per Question:</span>
+                        <span className="font-medium text-red-600 dark:text-red-400">{assessment.timeLimit} seconds</span>
                       </div>
-                      <p className="text-sm text-gray-500">Each question has a time limit</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Each question has a time limit</p>
                     </>
                   )}
                 </div>
@@ -220,9 +282,9 @@ export default function QuizAssessment() {
             </div>
 
             {/* Instructions */}
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 mb-8">
-              <h3 className="text-lg font-semibold text-yellow-900 mb-3">Instructions</h3>
-              <ul className="text-gray-700 space-y-2">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-600 p-6 mb-8">
+              <h3 className="text-lg font-semibold text-yellow-900 dark:text-yellow-300 mb-3">Instructions</h3>
+              <ul className="text-gray-700 dark:text-gray-300 space-y-2">
                 <li>• Read each question carefully before selecting your answer</li>
                 <li>• You can change your answer before clicking "Next Question"</li>
                 {assessment.timingMode !== 'question' && (
@@ -245,7 +307,7 @@ export default function QuizAssessment() {
             <div className="flex justify-center space-x-4">
               <button
                 onClick={() => window.history.back()}
-                className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+                className="px-6 py-3 bg-gray-500 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-600 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
               >
                 Go Back
               </button>
@@ -281,7 +343,21 @@ export default function QuizAssessment() {
 
   if (isQuizCompleted && results) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
+        {/* Theme Toggle */}
+        <div className="fixed top-4 right-4 z-50">
+          <button
+            onClick={toggleTheme}
+            className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-all duration-300 border border-sky-200 dark:border-sky-500/20"
+            aria-label="Toggle theme"
+          >
+            {theme === "dark" ? (
+              <Sun className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
+            ) : (
+              <Moon className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+            )}
+          </button>
+        </div>
         <div className="max-w-4xl mx-auto p-4">
           <ResultsHeader results={results} />
           {/* Only show QuestionSummary if showAnswers is enabled */}
@@ -310,10 +386,24 @@ export default function QuizAssessment() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 pt-16">
+      {/* Theme Toggle */}
+      <div className="fixed top-4 right-4 z-50">
+        <button
+          onClick={toggleTheme}
+          className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-all duration-300 border border-sky-200 dark:border-sky-500/20"
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? (
+            <Sun className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
+          ) : (
+            <Moon className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+          )}
+        </button>
+      </div>
       {/* Time Warning Banner */}
       {showTimeWarning() && (
-        <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-600 p-4 mb-4">
           <div className="flex">
             <div className="ml-3">
               <p className="text-sm text-red-700">
@@ -330,7 +420,7 @@ export default function QuizAssessment() {
 
       {/* Retry Warning Banner */}
       {showRetryWarning && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-600 p-4 mb-4">
           <div className="flex">
             <div className="ml-3">
               <p className="text-sm text-yellow-700">
@@ -343,7 +433,7 @@ export default function QuizAssessment() {
       )}
 
       {/* Progress Bar positioned below navbar */}
-      <div className="w-full bg-gray-50 pt-4 mt-20">
+      <div className="w-full bg-gray-50 dark:bg-slate-900 pt-4 mt-20">
         <div className="max-w-2xl mx-auto px-4">
           <div className="flex items-center justify-between mb-2">
           <ProgressBar
