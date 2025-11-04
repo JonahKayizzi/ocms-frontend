@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 
 export default function useQuizLogic(quizData, timingSettings = null) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -12,21 +12,22 @@ export default function useQuizLogic(quizData, timingSettings = null) {
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [totalTime, setTotalTime] = useState(null);
-  
+  const [quizStarted, setQuizStarted] = useState(false);
+
   const timerRef = useRef(null);
   const quizStartTimeRef = useRef(null);
+  const timerStartedRef = useRef(false); // Track if timer has been started for quiz mode
 
   const totalQuestions = quizData.length;
 
   // Initialize timing settings (only when settings change)
   useEffect(() => {
-    if (timingSettings && timingSettings.timingMode !== 'none') {
-      if (timingSettings.timingMode === 'quiz') {
+    if (timingSettings && timingSettings.timingMode !== "none") {
+      if (timingSettings.timingMode === "quiz") {
         // Set timer for entire quiz (in minutes)
         const quizTimeInSeconds = timingSettings.timeLimit * 60;
         setTotalTime(quizTimeInSeconds);
-        quizStartTimeRef.current = Date.now();
-      } else if (timingSettings.timingMode === 'question') {
+      } else if (timingSettings.timingMode === "question") {
         // Set timer for current question (in seconds)
         setTotalTime(timingSettings.timeLimit);
       }
@@ -36,43 +37,84 @@ export default function useQuizLogic(quizData, timingSettings = null) {
     }
   }, [timingSettings]);
 
-  // Start timer based on timing mode
+  // Start timer for quiz mode (only once, never restart)
   useEffect(() => {
-    // Clear any existing timer
+    // Only start timer once when quiz starts and conditions are met
+    if (
+      !quizStarted ||
+      !timingSettings ||
+      timingSettings.timingMode !== "quiz" ||
+      totalTime === null ||
+      timerStartedRef.current
+    ) {
+      return;
+    }
+
+    // Ensure timeRemaining is set before starting timer
+    if (timeRemaining === null) {
+      setTimeRemaining(totalTime);
+      return; // Wait for next render when timeRemaining is set
+    }
+
+    // Start the quiz timer only once - it will run continuously
+    timerStartedRef.current = true;
+    timerRef.current = setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (prev === null || prev === undefined) return prev;
+        if (prev <= 1) {
+          setIsTimeUp(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // Cleanup: only clear when component unmounts or quiz is reset
+    // Don't clear on re-renders - timer should continue running
+    return () => {
+      // Only clear if quiz is explicitly reset or component unmounts
+      // This cleanup is mainly for unmount, not for re-renders
+      // The timer will be manually cleared in submitQuiz or resetQuiz
+    };
+    // Note: We intentionally don't include timeRemaining in dependencies
+    // to prevent the effect from re-running every second
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quizStarted, timingSettings?.timingMode, totalTime]);
+
+  // Start timer for question mode (reset on question change)
+  useEffect(() => {
+    if (
+      !quizStarted ||
+      !timingSettings ||
+      timingSettings.timingMode !== "question" ||
+      totalTime === null
+    ) {
+      return;
+    }
+
+    // Clear existing timer for question mode
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
 
-    if (timingSettings && timingSettings.timingMode !== 'none' && totalTime !== null) {
-      let shouldStartTimer = false;
-      let initialTime = null;
+    // Reset isTimeUp flag when moving to new question
+    setIsTimeUp(false);
 
-      if (timingSettings.timingMode === 'quiz') {
-        // For quiz timing, only start once when timeRemaining is null
-        if (timeRemaining === null) {
-          shouldStartTimer = true;
-          initialTime = totalTime;
+    // Set timeRemaining for current question
+    setTimeRemaining(totalTime);
+
+    // Start new timer for current question
+    timerRef.current = setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (prev === null || prev === undefined) return prev;
+        if (prev <= 1) {
+          setIsTimeUp(true);
+          return 0;
         }
-      } else if (timingSettings.timingMode === 'question') {
-        // For question timing, always reset on question change
-        shouldStartTimer = true;
-        initialTime = totalTime;
-      }
-
-      if (shouldStartTimer && initialTime !== null) {
-        setTimeRemaining(initialTime);
-        timerRef.current = setInterval(() => {
-          setTimeRemaining((prev) => {
-            if (prev <= 1) {
-              setIsTimeUp(true);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      }
-    }
+        return prev - 1;
+      });
+    }, 1000);
 
     return () => {
       if (timerRef.current) {
@@ -80,21 +122,29 @@ export default function useQuizLogic(quizData, timingSettings = null) {
         timerRef.current = null;
       }
     };
-  }, [timingSettings, totalTime, currentQuestion]); // Include currentQuestion for question timing mode
+  }, [quizStarted, timingSettings?.timingMode, totalTime, currentQuestion]);
 
   // Handle time up
   useEffect(() => {
     if (isTimeUp) {
-      if (timingSettings?.timingMode === 'quiz') {
+      if (timingSettings?.timingMode === "quiz") {
         // Auto-submit entire quiz when time runs out
         submitQuiz();
-      } else if (timingSettings?.timingMode === 'question') {
-        // Auto-advance to next question when time runs out
-        handleNext();
+      } else if (timingSettings?.timingMode === "question") {
+        // Auto-advance to next question when time runs out (even if no answer)
+        // Or submit if on last question
+        if (currentQuestion < totalQuestions - 1) {
+          // Not last question - advance to next
+          handleNext(true);
+        } else {
+          // Last question - submit quiz
+          submitQuiz();
+        }
       }
       setIsTimeUp(false);
     }
-  }, [isTimeUp]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTimeUp, timingSettings?.timingMode, currentQuestion, totalQuestions]);
 
   const handleAnswerSelect = (answerIndex) => {
     setSelectedAnswer(answerIndex);
@@ -110,8 +160,8 @@ export default function useQuizLogic(quizData, timingSettings = null) {
     };
 
     // Print user selections object to console
-    console.log('=== USER SELECTIONS OBJECT ===');
-    console.log('Raw user answers object:', finalAnswers);
+    console.log("=== USER SELECTIONS OBJECT ===");
+    console.log("Raw user answers object:", finalAnswers);
 
     // Create detailed user selections for better readability
     const detailedUserSelections = quizData.map((question) => {
@@ -120,23 +170,27 @@ export default function useQuizLogic(quizData, timingSettings = null) {
         questionId: question.id,
         question: question.question,
         selectedAnswerIndex: userAnswerIndex,
-        selectedAnswerText: question.options[userAnswerIndex],
+        selectedAnswerText:
+          typeof userAnswerIndex === "number"
+            ? question.options[userAnswerIndex]
+            : null,
         correctAnswerIndex: question.correctAnswer,
         correctAnswerText: question.options[question.correctAnswer],
         isCorrect: userAnswerIndex === question.correctAnswer,
       };
     });
 
-    console.log('Detailed user selections:', detailedUserSelections);
+    console.log("Detailed user selections:", detailedUserSelections);
 
     // Calculate quiz duration
-    const quizDuration = quizStartTimeRef.current ? 
-      Math.round((Date.now() - quizStartTimeRef.current) / 1000) : 0;
+    const quizDuration = quizStartTimeRef.current
+      ? Math.round((Date.now() - quizStartTimeRef.current) / 1000)
+      : 0;
 
     // Prepare data for backend submission
     const backendSubmissionData = {
-      userId: 'user_123', // This would come from authentication
-      quizId: 'quiz_001', // This would be the quiz identifier
+      userId: "user_123", // This would come from authentication
+      quizId: "quiz_001", // This would be the quiz identifier
       startTime: new Date().toISOString(), // You'd track this from quiz start
       endTime: new Date().toISOString(),
       duration: quizDuration,
@@ -146,23 +200,23 @@ export default function useQuizLogic(quizData, timingSettings = null) {
         totalQuestions,
         userAgent: navigator.userAgent,
         timestamp: Date.now(),
-        timingMode: timingSettings?.timingMode || 'none',
+        timingMode: timingSettings?.timingMode || "none",
         timeLimit: timingSettings?.timeLimit || null,
       },
     };
 
-    console.log('=== BACKEND SUBMISSION DATA ===');
-    console.log('Data to be sent to backend:', backendSubmissionData);
+    console.log("=== BACKEND SUBMISSION DATA ===");
+    console.log("Data to be sent to backend:", backendSubmissionData);
 
     // Simulate API call delay
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Simulate backend API call (this is where you'd make the actual HTTP request)
-    console.log('=== SIMULATING BACKEND API CALL ===');
-    console.log('POST /api/quiz/submit');
+    console.log("=== SIMULATING BACKEND API CALL ===");
+    console.log("POST /api/quiz/submit");
     console.log(
-      'Request Body:',
-      JSON.stringify(backendSubmissionData, null, 2),
+      "Request Body:",
+      JSON.stringify(backendSubmissionData, null, 2)
     );
 
     // Calculate results
@@ -176,7 +230,7 @@ export default function useQuizLogic(quizData, timingSettings = null) {
     });
 
     const correctAnswers = answersArray.filter(
-      (answer) => answer.isCorrect,
+      (answer) => answer.isCorrect
     ).length;
     const percentage = Math.round((correctAnswers / totalQuestions) * 100);
 
@@ -189,51 +243,54 @@ export default function useQuizLogic(quizData, timingSettings = null) {
       timeUp: isTimeUp,
     };
 
-    console.log('=== QUIZ RESULTS ===');
-    console.log('Calculated results:', quizResults);
+    console.log("=== QUIZ RESULTS ===");
+    console.log("Calculated results:", quizResults);
 
     setResults(quizResults);
     setIsQuizCompleted(true);
     setIsSubmitting(false);
-    
+
     // Clear timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
   };
 
-  const handleNext = () => {
-    if (selectedAnswer !== null) {
-      // Store the answer in the JavaScript object
+  const handleNext = (forceAdvance = false) => {
+    // Allow advance on timeout even if no answer selected
+    const hasAnswer = selectedAnswer !== null && selectedAnswer !== undefined;
+    if (hasAnswer || forceAdvance) {
       const updatedAnswers = {
         ...userAnswers,
-        [quizData[currentQuestion].id]: selectedAnswer,
+        [quizData[currentQuestion].id]: hasAnswer ? selectedAnswer : null,
       };
 
       setUserAnswers(updatedAnswers);
 
-      // Print current state of user selections
       console.log(`=== ANSWER STORED FOR QUESTION ${currentQuestion + 1} ===`);
       console.log(`Question ID: ${quizData[currentQuestion].id}`);
-      console.log(`Selected Answer Index: ${selectedAnswer}`);
       console.log(
-        `Selected Answer Text: "${quizData[currentQuestion].options[selectedAnswer]}"`,
+        `Selected Answer Index: ${
+          hasAnswer ? selectedAnswer : "none (timeout)"
+        }`
       );
-      console.log('Current user answers object:', updatedAnswers);
-      console.log('---');
+      if (hasAnswer) {
+        console.log(
+          `Selected Answer Text: "${quizData[currentQuestion].options[selectedAnswer]}"`
+        );
+      }
+      console.log("Current user answers object:", updatedAnswers);
+      console.log("---");
 
       if (currentQuestion < totalQuestions - 1) {
         setCurrentQuestion(currentQuestion + 1);
         setSelectedAnswer(null);
-        
-        // Reset timer for next question if in question mode
-        if (timingSettings?.timingMode === 'question') {
-          setTimeRemaining(timingSettings.timeLimit);
-          setTotalTime(timingSettings.timeLimit);
-        }
+
+        // For question mode, the timer will reset automatically via useEffect
+        // For quiz mode, timer continues running - don't reset it
       } else {
-        // Quiz completed, submit answers
-        console.log('=== QUIZ COMPLETED - PREPARING SUBMISSION ===');
+        // Last question → submit
+        console.log("=== QUIZ COMPLETED - PREPARING SUBMISSION ===");
         submitQuiz();
       }
     }
@@ -241,7 +298,7 @@ export default function useQuizLogic(quizData, timingSettings = null) {
 
   const handlePrevious = () => {
     // Do not allow going back when timing per question is enforced
-    if (timingSettings?.timingMode === 'question') return;
+    if (timingSettings?.timingMode === "question") return;
 
     if (currentQuestion > 0) {
       const prevIndex = currentQuestion - 1;
@@ -249,17 +306,17 @@ export default function useQuizLogic(quizData, timingSettings = null) {
 
       // Restore previously selected answer if any
       const prevAnswer = userAnswers[quizData[prevIndex].id];
-      setSelectedAnswer(typeof prevAnswer === 'number' ? prevAnswer : null);
+      setSelectedAnswer(typeof prevAnswer === "number" ? prevAnswer : null);
 
       // If quiz had per-question timer (not allowed here), we'd also reset timer
-      if (timingSettings?.timingMode === 'quiz') {
+      if (timingSettings?.timingMode === "quiz") {
         // keep quiz timer running; no changes needed
       }
     }
   };
 
   const resetQuiz = () => {
-    console.log('=== QUIZ RESET ===');
+    console.log("=== QUIZ RESET ===");
     setCurrentQuestion(0);
     setSelectedAnswer(null);
     setUserAnswers({});
@@ -267,32 +324,52 @@ export default function useQuizLogic(quizData, timingSettings = null) {
     setResults(null);
     setIsSubmitting(false);
     setIsTimeUp(false);
-    quizStartTimeRef.current = Date.now();
-    
+    setQuizStarted(false);
+    timerStartedRef.current = false;
+    quizStartTimeRef.current = null;
+
     // Reset timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-    
+
     // Reinitialize timing
-    if (timingSettings && timingSettings.timingMode !== 'none') {
-      if (timingSettings.timingMode === 'quiz') {
+    if (timingSettings && timingSettings.timingMode !== "none") {
+      if (timingSettings.timingMode === "quiz") {
         const quizTimeInSeconds = timingSettings.timeLimit * 60;
         setTimeRemaining(quizTimeInSeconds);
         setTotalTime(quizTimeInSeconds);
-      } else if (timingSettings.timingMode === 'question') {
+      } else if (timingSettings.timingMode === "question") {
         setTimeRemaining(timingSettings.timeLimit);
         setTotalTime(timingSettings.timeLimit);
       }
     }
   };
 
+  // Function to start the quiz timer (called when quiz actually starts)
+  const startQuiz = () => {
+    setQuizStarted(true);
+    if (timingSettings && timingSettings.timingMode !== "none") {
+      if (timingSettings.timingMode === "quiz") {
+        const quizTimeInSeconds = timingSettings.timeLimit * 60;
+        setTotalTime(quizTimeInSeconds);
+        setTimeRemaining(quizTimeInSeconds);
+        quizStartTimeRef.current = Date.now();
+      } else if (timingSettings.timingMode === "question") {
+        setTotalTime(timingSettings.timeLimit);
+        setTimeRemaining(timingSettings.timeLimit);
+        quizStartTimeRef.current = Date.now();
+      }
+    }
+  };
+
   // Format time display
   const formatTime = (seconds) => {
-    if (timingSettings?.timingMode === 'quiz') {
+    if (timingSettings?.timingMode === "quiz") {
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = seconds % 60;
-      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+      return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
     }
     return `${seconds}s`;
   };
@@ -308,11 +385,12 @@ export default function useQuizLogic(quizData, timingSettings = null) {
     timeRemaining,
     isTimeUp,
     totalTime,
-    timingMode: timingSettings?.timingMode || 'none',
+    timingMode: timingSettings?.timingMode || "none",
     handleAnswerSelect,
     handleNext,
     handlePrevious,
     resetQuiz,
     formatTime,
+    startQuiz, // Export startQuiz function
   };
 }
