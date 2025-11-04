@@ -5,11 +5,9 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Plane,
   BookOpen,
-  Award,
   TrendingUp,
   Clock,
   CheckCircle,
-  BarChart3,
   FileText,
   ArrowRight,
   LogOut,
@@ -18,14 +16,20 @@ import {
   Moon,
 } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
-import { useGetPublishedCoursesQuery } from "../redux/apiSlice";
+import {
+  useGetPublishedCoursesQuery,
+  useGetCompletedCoursesQuery,
+  useGetUserProgressQuery,
+  useGetAssessmentResultsQuery,
+  useGetUserCoursesQuery,
+  useGetStandaloneAssessmentsQuery,
+} from "../redux/apiSlice";
 import {
   getToken,
   getUserInfo,
   removeToken,
   getUsernameFromToken,
 } from "../utils/jwtUtils";
-import { useState } from "react";
 
 const UserDashboard: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
@@ -47,54 +51,86 @@ const UserDashboard: React.FC = () => {
       userDepartment === "General"
   );
 
-  // Mock data for completed courses and quiz results (replace with actual API calls)
-  const [completedCourses] = useState([
-    {
-      id: 1,
-      name: "Air Traffic Control Fundamentals",
-      progress: 100,
-      completedDate: "2024-01-15",
-    },
-    {
-      id: 2,
-      name: "Aviation Safety Management",
-      progress: 100,
-      completedDate: "2024-01-10",
-    },
-  ]);
+  // Get completed courses from API
+  const { data: completedCoursesData = [], isLoading: completedLoading } =
+    useGetCompletedCoursesQuery();
 
-  const [quizResults] = useState([
-    {
-      id: 1,
-      assessmentName: "ATC Basics Assessment",
-      courseName: "Air Traffic Control Fundamentals",
-      score: 85,
-      totalQuestions: 20,
-      percentage: 85,
-      completedAt: "2024-01-15T10:30:00",
-    },
-    {
-      id: 2,
-      assessmentName: "Safety Procedures Quiz",
-      courseName: "Aviation Safety Management",
-      score: 18,
-      totalQuestions: 20,
-      percentage: 90,
-      completedAt: "2024-01-10T14:20:00",
-    },
-  ]);
+  // Get enrolled courses for the user
+  const { data: enrolledCourses = [], isLoading: enrolledLoading } =
+    useGetUserCoursesQuery(username || "", { skip: !username });
 
-  const [userProgress] = useState([
-    {
-      courseId: 3,
-      courseName: "Navigation Systems",
-      completedLessons: 5,
-      totalLessons: 8,
-      progressPercentage: 63,
-      lastAccessed: "2024-01-20",
-      status: "in_progress" as const,
-    },
-  ]);
+  // Get user progress for all courses
+  const { data: allUserProgress = [], isLoading: progressLoading } =
+    useGetUserProgressQuery(username || "", { skip: !username });
+
+  // Create a map of courseId -> progress for quick lookup
+  const progressMap = new Map(
+    allUserProgress.map((p) => [p.courseId, p])
+  );
+
+  // Build in-progress courses list:
+  // 1. Courses with progress data that are in_progress or not_started (but not completed)
+  // 2. Enrolled courses that don't have progress data yet (newly enrolled)
+  const inProgressFromProgress = allUserProgress.filter(
+    (progress) =>
+      (progress.status === "in_progress" || progress.status === "not_started") &&
+      progress.progressPercentage < 100
+  );
+
+  // Find enrolled courses that don't have progress data yet
+  const enrolledWithoutProgress = enrolledCourses.filter(
+    (course) => !progressMap.has(course.id)
+  );
+
+  // Combine and transform to unified format
+  const userProgress = [
+    ...inProgressFromProgress.map((progress) => ({
+      courseId: progress.courseId,
+      courseName: progress.courseName,
+      completedLessons: progress.completedLessons,
+      totalLessons: progress.totalLessons,
+      progressPercentage: progress.progressPercentage,
+      lastAccessed: progress.lastAccessed,
+      status: progress.status,
+    })),
+    ...enrolledWithoutProgress.map((course) => ({
+      courseId: course.id,
+      courseName: course.name,
+      completedLessons: 0,
+      totalLessons: 0, // Will be updated when progress is available
+      progressPercentage: 0,
+      lastAccessed: course.updatedAt || course.createdAt,
+      status: "not_started" as const,
+    })),
+  ];
+
+  // Get completed courses from progress data (courses with 100% completion)
+  const completedCoursesFromProgress = allUserProgress
+    .filter((progress) => progress.status === "completed" || progress.progressPercentage === 100)
+    .map((progress) => ({
+      id: progress.courseId,
+      name: progress.courseName,
+      progress: 100,
+      completedDate: progress.lastAccessed,
+    }));
+
+  // Combine completed courses from both sources (prefer progress data)
+  const completedCourses = completedCoursesFromProgress.length > 0
+    ? completedCoursesFromProgress
+    : completedCoursesData.map((course) => ({
+      id: course.id,
+      name: course.name,
+      progress: 100,
+      completedDate: course.updatedAt || course.endDate,
+    }));
+
+  // Get assessment results from API
+  const { data: quizResults = [], isLoading: resultsLoading } =
+    useGetAssessmentResultsQuery(username || "", { skip: !username });
+
+  // Get available standalone assessments
+  const { data: standaloneAssessments = [], isLoading: assessmentsLoading } =
+    useGetStandaloneAssessmentsQuery();
 
   const handleLogout = () => {
     removeToken();
@@ -117,6 +153,10 @@ const UserDashboard: React.FC = () => {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const handleStartAssessment = (assessmentId: number) => {
+    navigate(`/assessment/${assessmentId}`);
   };
 
   if (!token || !userInfo) {
@@ -210,7 +250,7 @@ const UserDashboard: React.FC = () => {
                   Completed Courses
                 </p>
                 <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {completedCourses.length}
+                  {completedLoading ? "..." : completedCourses.length}
                 </p>
               </div>
               <CheckCircle className="h-10 w-10 text-emerald-500 dark:text-emerald-400 opacity-50" />
@@ -223,7 +263,7 @@ const UserDashboard: React.FC = () => {
                   Assessments Taken
                 </p>
                 <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
-                  {quizResults.length}
+                  {resultsLoading ? "..." : quizResults.length}
                 </p>
               </div>
               <FileText className="h-10 w-10 text-purple-500 dark:text-purple-400 opacity-50" />
@@ -236,13 +276,15 @@ const UserDashboard: React.FC = () => {
                   Average Score
                 </p>
                 <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">
-                  {quizResults.length > 0
-                    ? Math.round(
+                  {resultsLoading
+                    ? "..."
+                    : quizResults.length > 0
+                      ? Math.round(
                         quizResults.reduce((sum, r) => sum + r.percentage, 0) /
-                          quizResults.length
+                        quizResults.length
                       )
-                    : 0}
-                  %
+                      : 0}
+                  {!resultsLoading && "%"}
                 </p>
               </div>
               <TrendingUp className="h-10 w-10 text-amber-500 dark:text-amber-400 opacity-50" />
@@ -307,12 +349,80 @@ const UserDashboard: React.FC = () => {
           )}
         </section>
 
+        {/* Available Assessments Section */}
+        <section className="mb-8">
+          <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">
+            Available Assessments
+          </h3>
+          {assessmentsLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-500/30 border-t-purple-500"></div>
+            </div>
+          ) : standaloneAssessments.length === 0 ? (
+            <div className="bg-white dark:bg-slate-800/50 rounded-xl p-8 text-center border border-purple-200 dark:border-purple-500/20">
+              <FileText className="mx-auto h-12 w-12 text-purple-500/30 mb-4" />
+              <p className="text-slate-600 dark:text-slate-400">
+                No standalone assessments available at the moment.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {standaloneAssessments.map((assessment) => (
+                <div
+                  key={assessment.id}
+                  className="group bg-white dark:bg-slate-800/50 rounded-xl shadow-lg hover:shadow-2xl hover:shadow-purple-500/20 dark:hover:shadow-purple-500/20 transition-all duration-300 overflow-hidden border border-purple-200 dark:border-purple-500/20 hover:border-purple-400 dark:hover:border-purple-500/50"
+                >
+                  <div className="h-2 bg-gradient-to-r from-purple-500 to-purple-600 group-hover:h-3 transition-all"></div>
+                  <div className="p-6">
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <h4 className="text-lg font-semibold text-slate-800 dark:text-white line-clamp-2">
+                        {assessment.name}
+                      </h4>
+                      <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
+                        Assessment
+                      </span>
+                    </div>
+                    <p className="text-slate-600 dark:text-slate-400 mb-4 line-clamp-2 text-sm leading-relaxed">
+                      {assessment.description}
+                    </p>
+                    <div className="flex flex-col gap-2 text-sm text-slate-500 dark:text-slate-500 mb-4 pb-4 border-b border-purple-200 dark:border-purple-500/10">
+                      {assessment.questionCount > 0 && (
+                        <span>
+                          {assessment.questionsToPresent || assessment.questionCount} questions
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleStartAssessment(assessment.id)}
+                      className="inline-flex items-center text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-semibold transition-colors"
+                    >
+                      Start Assessment
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* In Progress Courses */}
-        {userProgress.length > 0 && (
-          <section className="mb-8">
-            <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">
-              Courses In Progress
-            </h3>
+        <section className="mb-8">
+          <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">
+            Courses In Progress
+          </h3>
+          {progressLoading || enrolledLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-amber-500/30 border-t-amber-500"></div>
+            </div>
+          ) : userProgress.length === 0 ? (
+            <div className="bg-white dark:bg-slate-800/50 rounded-xl p-8 text-center border border-amber-200 dark:border-amber-500/20">
+              <Clock className="mx-auto h-12 w-12 text-amber-500/30 mb-4" />
+              <p className="text-slate-600 dark:text-slate-400">
+                No courses in progress. Start a course to see your progress here.
+              </p>
+            </div>
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {userProgress.map((progress) => (
                 <div
@@ -330,15 +440,25 @@ const UserDashboard: React.FC = () => {
                   <div className="mb-4">
                     <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
                       <span>
-                        {progress.completedLessons} of {progress.totalLessons}{" "}
-                        lessons completed
+                        {progress.totalLessons > 0 ? (
+                          <>
+                            {progress.completedLessons} of {progress.totalLessons}{" "}
+                            lessons completed
+                          </>
+                        ) : (
+                          "Course enrolled - ready to start"
+                        )}
                       </span>
-                      <span>{progress.progressPercentage}%</span>
+                      <span>
+                        {progress.totalLessons > 0
+                          ? `${progress.progressPercentage}%`
+                          : "0%"}
+                      </span>
                     </div>
                     <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
                       <div
                         className="bg-amber-500 dark:bg-amber-400 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${progress.progressPercentage}%` }}
+                        style={{ width: `${Math.max(progress.progressPercentage, 0)}%` }}
                       ></div>
                     </div>
                   </div>
@@ -357,15 +477,26 @@ const UserDashboard: React.FC = () => {
                 </div>
               ))}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         {/* Completed Courses */}
-        {completedCourses.length > 0 && (
-          <section className="mb-8">
-            <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">
-              Completed Courses
-            </h3>
+        <section className="mb-8">
+          <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">
+            Completed Courses
+          </h3>
+          {completedLoading || progressLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-500/30 border-t-emerald-500"></div>
+            </div>
+          ) : completedCourses.length === 0 ? (
+            <div className="bg-white dark:bg-slate-800/50 rounded-xl p-8 text-center border border-emerald-200 dark:border-emerald-500/20">
+              <CheckCircle className="mx-auto h-12 w-12 text-emerald-500/30 mb-4" />
+              <p className="text-slate-600 dark:text-slate-400">
+                No completed courses yet. Complete a course to see it here.
+              </p>
+            </div>
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {completedCourses.map((course) => (
                 <div
@@ -397,15 +528,26 @@ const UserDashboard: React.FC = () => {
                 </div>
               ))}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         {/* Assessment Results */}
-        {quizResults.length > 0 && (
-          <section>
-            <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">
-              Assessment Results
-            </h3>
+        <section>
+          <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">
+            Assessment Results
+          </h3>
+          {resultsLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-500/30 border-t-purple-500"></div>
+            </div>
+          ) : quizResults.length === 0 ? (
+            <div className="bg-white dark:bg-slate-800/50 rounded-xl p-8 text-center border border-purple-200 dark:border-purple-500/20">
+              <FileText className="mx-auto h-12 w-12 text-purple-500/30 mb-4" />
+              <p className="text-slate-600 dark:text-slate-400">
+                No assessment results yet. Complete an assessment to see your results here.
+              </p>
+            </div>
+          ) : (
             <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-lg border border-sky-200 dark:border-sky-500/20 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -433,12 +575,12 @@ const UserDashboard: React.FC = () => {
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-slate-800 dark:text-white">
-                            {result.assessmentName}
+                            {result.assessmentName || `Assessment #${result.assessmentId}`}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-slate-600 dark:text-slate-400">
-                            {result.courseName}
+                            {result.courseName || (result.courseId ? `Course #${result.courseId}` : "Standalone Assessment")}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -447,13 +589,12 @@ const UserDashboard: React.FC = () => {
                               {result.score}/{result.totalQuestions}
                             </span>
                             <span
-                              className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                result.percentage >= 80
-                                  ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
-                                  : result.percentage >= 60
+                              className={`px-2 py-1 text-xs font-semibold rounded-full ${result.percentage >= 80
+                                ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                                : result.percentage >= 60
                                   ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
                                   : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                              }`}
+                                }`}
                             >
                               {result.percentage}%
                             </span>
@@ -470,8 +611,8 @@ const UserDashboard: React.FC = () => {
                 </table>
               </div>
             </div>
-          </section>
-        )}
+          )}
+        </section>
       </main>
     </div>
   );
