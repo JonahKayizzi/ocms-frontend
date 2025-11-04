@@ -23,6 +23,7 @@ export default function LoginPage() {
         try {
             if (!username || !password) {
                 setError('Enter username and password');
+                setLoading(false);
                 return;
             }
 
@@ -62,8 +63,8 @@ export default function LoginPage() {
                     // Admin users go to admin dashboard
                     navigate('/admin', { state: { success: 'You are logged in.' } });
                 } else {
-                    // Other users go to home page (which shows courses/assessments)
-                    navigate('/', { state: { success: 'You are logged in.' } });
+                    // Other users go to user dashboard
+                    navigate('/dashboard', { state: { success: 'You are logged in.' } });
                 }
                 return;
             }
@@ -72,8 +73,8 @@ export default function LoginPage() {
             const user = { username, roles: ['USER'], provider } as any;
             localStorage.setItem('ans-sms', JSON.stringify(user));
             sessionStorage.setItem('ans-sms', encrypt(user));
-            // Demo mode: non-admin users go to home page
-            navigate('/', { state: { success: 'You are logged in (demo mode).' } });
+            // Demo mode: non-admin users go to user dashboard
+            navigate('/dashboard', { state: { success: 'You are logged in (demo mode).' } });
         } catch (err) {
             setError('Login failed');
         } finally {
@@ -172,5 +173,3 @@ export default function LoginPage() {
         </div>
     );
 }
-
-
