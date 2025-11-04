@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -27,12 +27,12 @@ export default function QuizAssessment() {
   const isAuthenticated = token && !isTokenExpired(token);
 
   // Fetch assessment data to get settings
-  const { 
-    data: assessment, 
-    isLoading: assessmentLoading, 
-    isError: assessmentError 
-  } = useGetAssessmentByIdQuery(assessmentId, { 
-    skip: !assessmentId 
+  const {
+    data: assessment,
+    isLoading: assessmentLoading,
+    isError: assessmentError,
+  } = useGetAssessmentByIdQuery(assessmentId, {
+    skip: !assessmentId,
   });
 
   // Check enrollment if assessment belongs to a course
@@ -60,17 +60,17 @@ export default function QuizAssessment() {
   }, [assessment, enrollmentData, isAuthenticated, navigate]);
 
   // Fetch random assessment questions from database
-  const { 
-    data: questions = [], 
-    isLoading: questionsLoading, 
-    isError: questionsError 
+  const {
+    data: questions = [],
+    isLoading: questionsLoading,
+    isError: questionsError,
   } = useGetRandomQuestionsByAssessmentQuery(
-    { 
-      assessmentId, 
-      questionsToPresent: assessment?.questionsToPresent 
-    }, 
-    { 
-      skip: !assessmentId || !assessment 
+    {
+      assessmentId,
+      questionsToPresent: assessment?.questionsToPresent,
+    },
+    {
+      skip: !assessmentId || !assessment,
     }
   );
 
@@ -90,18 +90,28 @@ export default function QuizAssessment() {
     const shuffledQuestions = shuffle([...questions]);
 
     return shuffledQuestions.map((question) => {
-      const allOptions = Array.isArray(question.options) ? [...question.options] : [];
+      const allOptions = Array.isArray(question.options)
+        ? [...question.options]
+        : [];
       // Identify the correct option
-      const correctOption = allOptions.find((opt) => opt && opt.isCorrect === true);
-      const correctOptionText = correctOption ? correctOption.optionText : '';
+      const correctOption = allOptions.find(
+        (opt) => opt && opt.isCorrect === true
+      );
+      const correctOptionText = correctOption ? correctOption.optionText : "";
 
       // Determine how many options to present (min 2, max total options)
-      const totalNonEmpty = allOptions.filter((o) => o && typeof o.optionText === 'string' && o.optionText.trim() !== '').length;
-      const maxChoices = Math.max(2, Math.min(totalNonEmpty || 2, Number(question.optionsToPresent) || 2));
+      const totalNonEmpty = allOptions.filter(
+        (o) =>
+          o && typeof o.optionText === "string" && o.optionText.trim() !== ""
+      ).length;
+      const maxChoices = Math.max(
+        2,
+        Math.min(totalNonEmpty || 2, Number(question.optionsToPresent) || 2)
+      );
 
       // Build candidate pool excluding correct first
       const distractors = allOptions
-        .filter((o) => o && o.optionText && o.optionText.trim() !== '')
+        .filter((o) => o && o.optionText && o.optionText.trim() !== "")
         .filter((o) => !o.isCorrect);
 
       const picked = [];
@@ -111,19 +121,23 @@ export default function QuizAssessment() {
       }
       // Fill remaining slots with random distractors
       const need = Math.max(0, maxChoices - picked.length);
-      const shuffledDistractors = shuffle(distractors).slice(0, need).map((o) => o.optionText);
+      const shuffledDistractors = shuffle(distractors)
+        .slice(0, need)
+        .map((o) => o.optionText);
       const limitedOptions = [...picked, ...shuffledDistractors];
 
       // Final shuffle so correct answer position is random
       const finalOptions = shuffle(limitedOptions);
-      const correctIndex = finalOptions.findIndex((t) => t === correctOptionText);
+      const correctIndex = finalOptions.findIndex(
+        (t) => t === correctOptionText
+      );
 
       return {
         id: question.id,
         question: question.text,
         options: finalOptions,
         correctAnswer: correctIndex >= 0 ? correctIndex : 0,
-        imageDataUrl: question.imageDataUrl || '',
+        imageDataUrl: question.imageDataUrl || "",
       };
     });
   }, [questions]); // Only recalculate when questions change
@@ -136,11 +150,6 @@ export default function QuizAssessment() {
       timeLimit: assessment.timeLimit,
     };
   }, [assessment?.timingMode, assessment?.timeLimit]);
-
-
-  const handleStartQuiz = () => {
-    setShowIntroduction(false);
-  };
 
   const handleBackToIntro = () => {
     setShowIntroduction(true);
@@ -162,11 +171,18 @@ export default function QuizAssessment() {
     handlePrevious,
     resetQuiz: resetQuizLogic,
     formatTime,
+    startQuiz,
   } = useQuizLogic(quizData, timingSettings);
 
   const resetQuiz = () => {
     resetQuizLogic();
     setShowIntroduction(true);
+  };
+
+  // Start quiz timer when user clicks "Start Quiz"
+  const handleStartQuiz = () => {
+    setShowIntroduction(false);
+    startQuiz(); // Start the timer when quiz begins
   };
 
   // Show loading screen while fetching data
@@ -253,13 +269,13 @@ export default function QuizAssessment() {
               <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-green-900 dark:text-green-300 mb-4">Timing</h3>
                 <div className="space-y-3">
-                  {assessment.timingMode === 'none' && (
+                  {assessment.timingMode === "none" && (
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-300">Time Limit:</span>
                       <span className="font-medium text-green-600 dark:text-green-400">No Time Limit</span>
                     </div>
                   )}
-                  {assessment.timingMode === 'quiz' && (
+                  {assessment.timingMode === "quiz" && (
                     <>
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-300">Time Limit:</span>
@@ -268,7 +284,7 @@ export default function QuizAssessment() {
                       <p className="text-sm text-gray-500 dark:text-gray-400">Entire quiz must be completed within this time</p>
                     </>
                   )}
-                  {assessment.timingMode === 'question' && (
+                  {assessment.timingMode === "question" && (
                     <>
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-300">Time per Question:</span>
@@ -290,15 +306,24 @@ export default function QuizAssessment() {
                 {assessment.timingMode !== 'question' && (
                   <li>• You can navigate back to previous questions using the "Previous" button</li>
                 )}
-                {assessment.timingMode === 'quiz' && (
-                  <li>• Keep track of the timer - the quiz will auto-submit when time runs out</li>
+                {assessment.timingMode === "quiz" && (
+                  <li>
+                    • Keep track of the timer - the quiz will auto-submit when
+                    time runs out
+                  </li>
                 )}
-                {assessment.timingMode === 'question' && (
-                  <li>• Each question has a time limit - you'll be moved to the next question automatically</li>
+                {assessment.timingMode === "question" && (
+                  <li>
+                    • Each question has a time limit - you'll be moved to the
+                    next question automatically
+                  </li>
                 )}
                 <li>• Once you submit, you cannot change your answers</li>
                 {assessment.maxRetries > 1 && (
-                  <li>• You have {assessment.maxRetries} attempts to complete this quiz</li>
+                  <li>
+                    • You have {assessment.maxRetries} attempts to complete this
+                    quiz
+                  </li>
                 )}
               </ul>
             </div>
@@ -330,7 +355,12 @@ export default function QuizAssessment() {
 
   // Show time warning when 10% of time is left
   const showTimeWarning = () => {
-    if (!timingSettings || timingSettings.timingMode === 'none' || !timeRemaining || !totalTime) {
+    if (
+      !timingSettings ||
+      timingSettings.timingMode === "none" ||
+      !timeRemaining ||
+      !totalTime
+    ) {
       return false;
     }
     const warningThreshold = totalTime * 0.1;
@@ -362,11 +392,11 @@ export default function QuizAssessment() {
           <ResultsHeader results={results} />
           {/* Only show QuestionSummary if showAnswers is enabled */}
           {assessment.showAnswers && (
-          <QuestionSummary
-            quizData={quizData}
-            results={results}
-            onResetQuiz={resetQuiz}
-          />
+            <QuestionSummary
+              quizData={quizData}
+              results={results}
+              onResetQuiz={resetQuiz}
+            />
           )}
           {/* Show retry option if maxRetries allows it */}
           {assessment.maxRetries > 1 && (
@@ -407,11 +437,12 @@ export default function QuizAssessment() {
           <div className="flex">
             <div className="ml-3">
               <p className="text-sm text-red-700">
-                <strong>⚠️ Time Warning:</strong> 
-                {timingMode === 'quiz' 
-                  ? ` Only ${Math.ceil(timeRemaining / 60)} minute(s) remaining for the entire quiz!`
-                  : ` Only ${timeRemaining} second(s) remaining for this question!`
-                }
+                <strong>⚠️ Time Warning:</strong>
+                {timingMode === "quiz"
+                  ? ` Only ${Math.ceil(
+                      timeRemaining / 60
+                    )} minute(s) remaining for the entire quiz!`
+                  : ` Only ${timeRemaining} second(s) remaining for this question!`}
               </p>
             </div>
           </div>
@@ -424,8 +455,9 @@ export default function QuizAssessment() {
           <div className="flex">
             <div className="ml-3">
               <p className="text-sm text-yellow-700">
-                <strong>Quiz Attempts:</strong> You have {remainingAttempts} attempt(s) remaining after this one.
-                {assessment.maxRetries === 1 && ' This is your only attempt.'}
+                <strong>Quiz Attempts:</strong> You have {remainingAttempts}{" "}
+                attempt(s) remaining after this one.
+                {assessment.maxRetries === 1 && " This is your only attempt."}
               </p>
             </div>
           </div>
@@ -436,10 +468,10 @@ export default function QuizAssessment() {
       <div className="w-full bg-gray-50 dark:bg-slate-900 pt-4 mt-20">
         <div className="max-w-2xl mx-auto px-4">
           <div className="flex items-center justify-between mb-2">
-          <ProgressBar
-            currentQuestion={currentQuestion}
-            totalQuestions={totalQuestions}
-          />
+            <ProgressBar
+              currentQuestion={currentQuestion}
+              totalQuestions={totalQuestions}
+            />
             <Timer
               timeRemaining={timeRemaining}
               timingMode={timingMode}
@@ -452,7 +484,7 @@ export default function QuizAssessment() {
       </div>
 
       {/* Main content area */}
-      <div className="pt-2 px-4 pb-4 pt-16">
+      <div className="px-4 pb-4 pt-16">
         <div className="max-w-2xl mx-auto">
           <QuestionCard
             question={quizData[currentQuestion]}
@@ -460,7 +492,7 @@ export default function QuizAssessment() {
             onAnswerSelect={handleAnswerSelect}
             onNext={handleNext}
             onPrevious={handlePrevious}
-            showPrevious={timingMode !== 'question' && currentQuestion > 0}
+            showPrevious={timingMode !== "question" && currentQuestion > 0}
             isLastQuestion={currentQuestion === totalQuestions - 1}
           />
         </div>
