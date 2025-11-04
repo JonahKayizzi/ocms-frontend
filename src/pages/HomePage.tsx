@@ -15,15 +15,31 @@ import {
 import {
   useGetPublishedCoursesQuery,
   useGetCompletedCoursesQuery,
+  useGetStandaloneAssessmentsQuery,
+  useGetEnrollmentCountQuery,
 } from "../redux/apiSlice";
+import { getToken, isTokenExpired } from "../utils/jwtUtils";
+import { useNavigate } from "react-router-dom";
 import { useTheme } from "../contexts/ThemeContext";
 
 const HomePage: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
   const { data: publishedCourses = [], isLoading: publishedLoading } =
     useGetPublishedCoursesQuery();
   const { data: completedCourses = [], isLoading: completedLoading } =
     useGetCompletedCoursesQuery();
+  const { data: standaloneAssessments = [], isLoading: assessmentsLoading } =
+    useGetStandaloneAssessmentsQuery();
+
+  // Get enrollment counts for courses (for display) - using a component approach
+  const EnrollmentCount: React.FC<{ courseId: number }> = ({ courseId }) => {
+    const { data: countData } = useGetEnrollmentCountQuery(courseId, { skip: !courseId });
+    const count = countData?.count || 0;
+    return count > 0 ? (
+      <span>{count === 1 ? "1 student enrolled" : `${count} students enrolled`}</span>
+    ) : null;
+  };
 
   const getStatusBadge = (status: number) => {
     switch (status) {
@@ -57,10 +73,11 @@ const HomePage: React.FC = () => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
-      month: "short",
+      month: "long",
       day: "numeric",
     });
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-blue-100 dark:from-slate-900 dark:via-navy-900 dark:to-slate-800">
@@ -74,10 +91,10 @@ const HomePage: React.FC = () => {
               </div>
               <div className="flex flex-col">
                 <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-                  UCAA
+                  UCAA - OCMS
                 </h1>
                 <p className="text-xs text-sky-600 dark:text-sky-300">
-                  Staff Competency Assessment
+                  Staff Online Assessment
                 </p>
               </div>
             </div>
@@ -123,7 +140,7 @@ const HomePage: React.FC = () => {
             </span>
           </h2>
           <p className="text-xl text-slate-600 dark:text-slate-300 mb-12 max-w-2xl mx-auto leading-relaxed">
-            Uganda Civil Aviation Authority's comprehensive assessment platform
+            Uganda Civil Aviation Authority's comprehensive online assessment platform
             designed to evaluate and enhance staff competency across critical
             aviation safety and operational domains.
           </p>
@@ -162,8 +179,8 @@ const HomePage: React.FC = () => {
               },
               {
                 icon: Users,
-                title: "Team Management",
-                desc: "Organizational oversight",
+                title: "All Departments",
+                desc: "Customized for all department needs",
               },
               {
                 icon: CheckCircle,
@@ -188,19 +205,19 @@ const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Published Courses Section */}
+      {/* Active Programs and Assessments Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h3 className="text-4xl font-bold text-slate-800 dark:text-white mb-4">
-              Active Assessment Programs
+              Active Programs
             </h3>
             <p className="text-lg text-slate-600 dark:text-slate-400">
               Comprehensive evaluation pathways for aviation professionals
             </p>
           </div>
 
-          {publishedLoading ? (
+          {publishedLoading || assessmentsLoading ? (
             <div className="flex justify-center py-20">
               <div className="flex flex-col items-center gap-4">
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-sky-500/30 border-t-sky-500"></div>
@@ -209,7 +226,7 @@ const HomePage: React.FC = () => {
                 </p>
               </div>
             </div>
-          ) : publishedCourses.length === 0 ? (
+          ) : publishedCourses.length === 0 && standaloneAssessments.length === 0 ? (
             <div className="text-center py-20">
               <Plane className="mx-auto h-16 w-16 text-sky-500/30 mb-4" />
               <h3 className="text-xl font-semibold text-slate-800 dark:text-white mb-2">
@@ -221,6 +238,7 @@ const HomePage: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Render Courses */}
               {publishedCourses.map((course) => (
                 <div
                   key={course.id}
@@ -232,30 +250,61 @@ const HomePage: React.FC = () => {
                       <h4 className="text-lg font-semibold text-slate-800 dark:text-white line-clamp-2">
                         {course.name}
                       </h4>
-                      {getStatusBadge(course.status)}
+                      <div className="flex items-center gap-2">
+                        {getStatusBadge(course.status)}
+                        <span className="px-2 py-0.5 text-xs rounded-full bg-sky-100 text-sky-700 border border-sky-200">Course</span>
+                      </div>
                     </div>
                     <p className="text-slate-600 dark:text-slate-400 mb-4 line-clamp-2 text-sm leading-relaxed">
                       {course.description}
                     </p>
                     <div className="flex flex-col gap-2 text-sm text-slate-500 dark:text-slate-500 mb-4 pb-4 border-b border-sky-200 dark:border-sky-500/10">
-                      <span>
-                        {course.startDate
-                          ? `Starts: ${formatDate(course.startDate)}`
-                          : "Start date TBD"}
-                      </span>
-                      <span>
-                        {course.endDate
-                          ? `Ends: ${formatDate(course.endDate)}`
-                          : "End date TBD"}
-                      </span>
+                      {course.endDate && (
+                        <span>
+                          Course expires on: {formatDate(course.endDate)}
+                        </span>
+                      )}
+                      <EnrollmentCount courseId={course.id} />
                     </div>
                     <Link
                       to={`/course/${course.id}`}
                       className="inline-flex items-center text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 font-semibold transition-colors"
                     >
-                      Start Assessment
+                      Start Course
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
+                  </div>
+                </div>
+              ))}
+
+              {/* Render Assessments */}
+              {standaloneAssessments.map((a) => (
+                <div key={a.id} className="group bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-lg hover:shadow-2xl hover:shadow-purple-500/20 dark:hover:shadow-purple-500/20 transition-all duration-300 overflow-hidden border border-purple-200 dark:border-purple-500/20 hover:border-purple-400 dark:hover:border-purple-500/50">
+                  <div className="h-2 bg-gradient-to-r from-purple-500 to-purple-600 group-hover:h-3 transition-all"></div>
+                  <div className="p-6">
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <h4 className="text-lg font-semibold text-slate-800 dark:text-white line-clamp-2">{a.name}</h4>
+                      <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700">Assessment</span>
+                    </div>
+                    <p className="text-slate-600 dark:text-slate-400 mb-4 line-clamp-2 text-sm leading-relaxed">{a.description}</p>
+                    <button
+                      onClick={async () => {
+                        const token = getToken();
+                        if (!token || isTokenExpired(token)) {
+                          navigate("/login", { state: { warning: "Please login to access assessments" } });
+                          return;
+                        }
+
+                        // Check if assessment belongs to a course
+                        // Note: We'll need to fetch the assessment to check courseId
+                        // For now, we'll navigate and let the quiz page handle it
+                        navigate(`/assessment/${a.id}`);
+                      }}
+                      className="inline-flex items-center text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-semibold transition-colors"
+                    >
+                      Start Assessment
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               ))}

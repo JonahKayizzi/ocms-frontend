@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Sun, Moon } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
 import { encrypt } from '../encryption/Encryption';
-import { storeToken, getToken } from '../utils/jwtUtils';
+import { storeToken } from '../utils/jwtUtils';
 
 export default function LoginPage() {
     const navigate = useNavigate();
     const location = useLocation() as { state?: { warning?: string; success?: string } };
+    const { theme, toggleTheme } = useTheme();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [provider, setProvider] = useState<'sms' | 'tt'>('sms');
@@ -30,6 +33,8 @@ export default function LoginPage() {
             const endpoint = provider === 'sms' ? '/user/login' : '/auth/login';
 
             let token: string | undefined;
+            let isAdmin = false;
+            let userType: string | undefined;
 
             try {
                 const resp = await fetch(baseUrl + endpoint, {
@@ -42,6 +47,8 @@ export default function LoginPage() {
                 if (resp.ok) {
                     const data = await resp.json();
                     token = data.token || data.accessToken || data.jwt;
+                    isAdmin = data.isAdmin === true || data.userType === 'admin';
+                    userType = data.userType;
                 }
             } catch (fetchErr) {
                 // Network failure falls back to demo flow below
@@ -49,7 +56,15 @@ export default function LoginPage() {
 
             if (token) {
                 storeToken(token);
-                navigate('/admin', { state: { success: 'You are logged in.' } });
+
+                // Redirect based on user type
+                if (isAdmin || userType === 'admin') {
+                    // Admin users go to admin dashboard
+                    navigate('/admin', { state: { success: 'You are logged in.' } });
+                } else {
+                    // Other users go to home page (which shows courses/assessments)
+                    navigate('/', { state: { success: 'You are logged in.' } });
+                }
                 return;
             }
 
@@ -57,7 +72,8 @@ export default function LoginPage() {
             const user = { username, roles: ['USER'], provider } as any;
             localStorage.setItem('ans-sms', JSON.stringify(user));
             sessionStorage.setItem('ans-sms', encrypt(user));
-            navigate('/admin', { state: { success: 'You are logged in (demo mode).' } });
+            // Demo mode: non-admin users go to home page
+            navigate('/', { state: { success: 'You are logged in (demo mode).' } });
         } catch (err) {
             setError('Login failed');
         } finally {
@@ -66,17 +82,32 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-            <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900 px-4">
+            {/* Theme Toggle */}
+            <div className="fixed top-4 right-4 z-50">
+                <button
+                    onClick={toggleTheme}
+                    className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-all duration-300 border border-sky-200 dark:border-sky-500/20"
+                    aria-label="Toggle theme"
+                >
+                    {theme === "dark" ? (
+                        <Sun className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
+                    ) : (
+                        <Moon className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+                    )}
+                </button>
+            </div>
+
+            <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-8">
                 <div className="mb-6 text-center">
-                    <div className="mx-auto w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white text-xl">📘</div>
-                    <h1 className="mt-3 text-2xl font-semibold text-gray-900">OCMS Login</h1>
-                    <p className="mt-1 text-sm text-gray-600">Sign in with your SMS or AIM account</p>
+                    <div className="mx-auto w-12 h-12 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center text-white text-xl">📘</div>
+                    <h1 className="mt-3 text-2xl font-semibold text-gray-900 dark:text-white">OCMS Login</h1>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Sign in with your SMS or AIM account</p>
                     {location.state?.warning && (
-                        <p className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">{location.state.warning}</p>
+                        <p className="mt-2 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded px-3 py-2">{location.state.warning}</p>
                     )}
                     {location.state?.success && (
-                        <p className="mt-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">{location.state.success}</p>
+                        <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded px-3 py-2">{location.state.success}</p>
                     )}
                 </div>
 
@@ -84,14 +115,14 @@ export default function LoginPage() {
                 <div className="mb-4 grid grid-cols-2 gap-2">
                     <button
                         type="button"
-                        className={`px-3 py-2 rounded border text-sm ${provider === 'sms' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
+                        className={`px-3 py-2 rounded border text-sm ${provider === 'sms' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-slate-600'}`}
                         onClick={() => setProvider('sms')}
                     >
                         Use SMS Account
                     </button>
                     <button
                         type="button"
-                        className={`px-3 py-2 rounded border text-sm ${provider === 'tt' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300'}`}
+                        className={`px-3 py-2 rounded border text-sm ${provider === 'tt' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-slate-600'}`}
                         onClick={() => setProvider('tt')}
                     >
                         Use AIM Account
@@ -100,11 +131,11 @@ export default function LoginPage() {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
+                        <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
                         <input
                             id="username"
                             type="text"
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-600 focus:ring-blue-600"
+                            className="mt-1 block w-full rounded-md border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-blue-600 dark:focus:border-blue-500 focus:ring-blue-600 dark:focus:ring-blue-500"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             autoComplete="username"
@@ -113,11 +144,11 @@ export default function LoginPage() {
                     </div>
 
                     <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
+                        <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
                         <input
                             id="password"
                             type="password"
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-600 focus:ring-blue-600"
+                            className="mt-1 block w-full rounded-md border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-blue-600 dark:focus:border-blue-500 focus:ring-blue-600 dark:focus:ring-blue-500"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             autoComplete="current-password"
@@ -126,7 +157,7 @@ export default function LoginPage() {
                     </div>
 
                     {error && (
-                        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>
+                        <div className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded px-3 py-2">{error}</div>
                     )}
 
                     <button
