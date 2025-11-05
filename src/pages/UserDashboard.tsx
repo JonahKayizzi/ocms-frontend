@@ -322,7 +322,13 @@ const UserDashboard: React.FC = () => {
                   Assessments Taken
                 </p>
                 <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
-                  {resultsLoading ? "..." : myAttempts.length}
+                  {resultsLoading
+                    ? "..."
+                    : (() => {
+                      if (!myAttempts || myAttempts.length === 0) return 0;
+                      const unique = new Set((myAttempts as any[]).map((a: any) => a?.quiz?.id || `quiz-${a.id}`));
+                      return unique.size;
+                    })()}
                 </p>
               </div>
               <FileText className="h-10 w-10 text-purple-500 dark:text-purple-400 opacity-50" />
