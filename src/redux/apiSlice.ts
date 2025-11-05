@@ -7,12 +7,10 @@ import type {
   AssessmentQuestion,
   QuestionOption,
   CourseMaterial,
-  CourseFormData,
   CoursePayload,
   LessonFormData,
   AssessmentFormData,
   QuestionFormData,
-  AssessmentResult,
   UserCourseProgress,
 } from "../types";
 
@@ -51,6 +49,19 @@ export const apiSlice = createApi({
     "AssessmentResult",
   ],
   endpoints: (builder) => ({
+    // Quiz attempts
+    startQuizAttempt: builder.mutation<{ attemptId: number; attemptNumber: number; maxRetries: number }, { quizId: number; participantId: string }>({
+      query: (body) => ({ url: "/quiz-attempts/start", method: "POST", body }),
+    }),
+    recordQuizAnswer: builder.mutation<void, { attemptId: number; questionId: number; answerId: number | null; participantId: string; correct: boolean }>({
+      query: (body) => ({ url: "/quiz-attempts/answer", method: "POST", body }),
+    }),
+    finishQuizAttempt: builder.mutation<{ attemptId: number; score: number; total: number; percentage: number; passed: boolean }, { attemptId: number }>({
+      query: (body) => ({ url: "/quiz-attempts/finish", method: "POST", body }),
+    }),
+    getUserQuizAttempts: builder.query<any[], string>({
+      query: (participantId) => `/quiz-attempts/user/${encodeURIComponent(participantId)}`,
+    }),
     // Course endpoints
     getCourses: builder.query<Course[], void>({
       query: () => "/courses",
@@ -462,11 +473,12 @@ export const apiSlice = createApi({
         `/participant-progress/user/${encodeURIComponent(participantId)}`,
       providesTags: ["Progress"],
     }),
-    getAssessmentResults: builder.query<AssessmentResult[], string>({
-      query: (participantId) =>
-        `/assessment-results/user/${encodeURIComponent(participantId)}`,
-      providesTags: ["Progress"],
-    }),
+    // Deprecated: old assessment results endpoint (no longer used)
+    // getAssessmentResults: builder.query<AssessmentResult[], string>({
+    //   query: (participantId) =>
+    //     `/assessment-results/user/${encodeURIComponent(participantId)}`,
+    //   providesTags: ["Progress"],
+    // }),
   }),
 });
 
@@ -531,9 +543,14 @@ export const {
   useSetLessonCompletedMutation,
   useGetCourseProgressQuery,
 
+  // Quiz attempt hooks
+  useStartQuizAttemptMutation,
+  useRecordQuizAnswerMutation,
+  useFinishQuizAttemptMutation,
+  useGetUserQuizAttemptsQuery,
+
   // User Dashboard hooks
   useGetCoursesByDepartmentQuery,
   useGetUserCoursesQuery,
   useGetUserProgressQuery,
-  useGetAssessmentResultsQuery,
 } = apiSlice;

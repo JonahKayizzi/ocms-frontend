@@ -17,6 +17,7 @@ import {
   useGetCompletedCoursesQuery,
   useGetStandaloneAssessmentsQuery,
   useGetEnrollmentCountQuery,
+  useGetAssessmentsByCourseQuery,
 } from "../redux/apiSlice";
 import { getToken, isTokenExpired } from "../utils/jwtUtils";
 import { useNavigate } from "react-router-dom";
@@ -39,6 +40,18 @@ const HomePage: React.FC = () => {
     return count > 0 ? (
       <span>{count === 1 ? "1 student enrolled" : `${count} students enrolled`}</span>
     ) : null;
+  };
+
+  // Shows a small tag if a course has at least one assessment
+  const HasAssessmentBadge: React.FC<{ courseId: number }> = ({ courseId }) => {
+    const { data: assessments = [] } = useGetAssessmentsByCourseQuery(courseId, { skip: !courseId });
+    const hasAssessment = (assessments?.length || 0) > 0;
+    if (!hasAssessment) return null;
+    return (
+      <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
+        Has assessment
+      </span>
+    );
   };
 
   const getStatusBadge = (status: number) => {
@@ -265,6 +278,9 @@ const HomePage: React.FC = () => {
                         </span>
                       )}
                       <EnrollmentCount courseId={course.id} />
+                      <div className="flex items-center gap-2">
+                        <HasAssessmentBadge courseId={course.id} />
+                      </div>
                     </div>
                     <Link
                       to={`/course/${course.id}`}
