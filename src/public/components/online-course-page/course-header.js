@@ -4,14 +4,14 @@ import {
 import PropTypes from 'prop-types';
 
 export default function CourseHeader({
-  title, subtitle, duration, students, endDate, username, isEnrolled, onEnrollClick, onLoginClick, onLogoutClick,
+  title, subtitle, duration, students, endDate, username, isEnrolled, onEnrollClick, onLoginClick, onLogoutClick, onBackClick,
 }) {
   return (
     <div className="bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-28">
         {/* Breadcrumb */}
         <div className="flex items-center space-x-2 mb-4">
-          <button type="button" className="flex items-center space-x-1 text-gray-600 hover:text-gray-900 transition-colors">
+          <button type="button" onClick={onBackClick} className="flex items-center space-x-1 text-gray-600 hover:text-gray-900 transition-colors">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-sm">Back to Courses</span>
           </button>
@@ -104,6 +104,7 @@ CourseHeader.propTypes = {
   onEnrollClick: PropTypes.func,
   onLoginClick: PropTypes.func,
   onLogoutClick: PropTypes.func,
+  onBackClick: PropTypes.func,
 };
 
 CourseHeader.defaultProps = {
@@ -113,4 +114,5 @@ CourseHeader.defaultProps = {
   onEnrollClick: () => {},
   onLoginClick: () => {},
   onLogoutClick: () => {},
+  onBackClick: () => {},
 };

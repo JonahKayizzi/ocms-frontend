@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Sun, Moon } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { useGetAssessmentByIdQuery, useGetRandomQuestionsByAssessmentQuery, useIsEnrolledQuery } from '../../../redux/apiSlice';
+import { useGetAssessmentByIdQuery, useGetRandomQuestionsByAssessmentQuery, useIsEnrolledQuery, useStartQuizAttemptMutation, useRecordQuizAnswerMutation, useFinishQuizAttemptMutation, useGetUserQuizAttemptsQuery } from '../../../redux/apiSlice';
 import { getToken, getUsernameFromToken, isTokenExpired } from '../../../utils/jwtUtils';
 import useQuizLogic from '../hooks/useQuizLogic';
 import ProgressBar from './ProgressBar';
@@ -20,6 +20,13 @@ export default function QuizAssessment() {
   const assessmentId = Number(id);
   const [showIntroduction, setShowIntroduction] = useState(true);
   const { theme, toggleTheme } = useTheme();
+  const [attemptId, setAttemptId] = useState(null);
+  const [startAttempt] = useStartQuizAttemptMutation();
+  const [recordAnswer] = useRecordQuizAnswerMutation();
+  const [finishAttempt] = useFinishQuizAttemptMutation();
+  const persistedRef = useRef(false);
+
+  // (moved below after useQuizLogic to avoid referencing variables before initialization)
 
   // Check authentication
   const token = getToken();
@@ -34,6 +41,33 @@ export default function QuizAssessment() {
   } = useGetAssessmentByIdQuery(assessmentId, {
     skip: !assessmentId,
   });
+
+  // Fetch user attempts to compute attempts left
+  const { data: userAttempts = [], refetch: refetchAttempts } = useGetUserQuizAttemptsQuery(
+    username || '',
+    { skip: !username, refetchOnMountOrArgChange: true, refetchOnFocus: true, refetchOnReconnect: true }
+  );
+
+  // Always recheck attempts when intro is visible or tab/window gains focus
+  useEffect(() => {
+    if (showIntroduction && username) {
+      try { refetchAttempts(); } catch (_) { /* noop */ }
+    }
+  }, [showIntroduction, username, assessmentId, refetchAttempts]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (username) {
+        try { refetchAttempts(); } catch (_) { /* noop */ }
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [username, refetchAttempts]);
 
   // Check enrollment if assessment belongs to a course
   const { data: enrollmentData } = useIsEnrolledQuery(
@@ -174,13 +208,68 @@ export default function QuizAssessment() {
     startQuiz,
   } = useQuizLogic(quizData, timingSettings);
 
+  // Persist answers and finalize attempt once when quiz is completed
+  useEffect(() => {
+    if (!isQuizCompleted || !results || !attemptId || !username) return;
+    if (persistedRef.current) return;
+    persistedRef.current = true;
+    (async () => {
+      try {
+        for (const ans of results.answers || []) {
+          await recordAnswer({
+            attemptId,
+            questionId: ans.questionId,
+            answerId: null,
+            participantId: username,
+            correct: !!ans.isCorrect,
+          }).unwrap();
+        }
+        await finishAttempt({ attemptId }).unwrap();
+        // After finishing, if max attempts reached, redirect to dashboard
+        const attemptsForThis = Array.isArray(userAttempts)
+          ? userAttempts.filter((a) => a?.quiz?.id === assessmentId).length
+          : 0;
+        const maxRetries = assessment?.maxRetries || 0;
+        if (maxRetries > 0 && attemptsForThis + 1 >= maxRetries) {
+          navigate('/dashboard');
+        }
+      } catch (err) {
+        // ignore persistence errors; UI already shows results
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isQuizCompleted, results, attemptId, username]);
+
   const resetQuiz = () => {
     resetQuizLogic();
     setShowIntroduction(true);
   };
 
   // Start quiz timer when user clicks "Start Quiz"
-  const handleStartQuiz = () => {
+  const handleStartQuiz = async () => {
+    // Local guard using attempts left
+    const attemptsForThis = Array.isArray(userAttempts)
+      ? userAttempts.filter((a) => a?.quiz?.id === assessmentId).length
+      : 0;
+    const maxRetries = assessment?.maxRetries || 0;
+    if (maxRetries > 0 && attemptsForThis >= maxRetries) {
+      window.alert('Maximum attempts reached');
+      return;
+    }
+    try {
+      if (username && assessmentId) {
+        const resp = await startAttempt({ quizId: assessmentId, participantId: username }).unwrap();
+        setAttemptId(resp.attemptId);
+      }
+    } catch (e) {
+      const status = e?.status || 0;
+      const msg = e?.data?.message || 'Unable to start attempt';
+      if (status === 403) {
+        window.alert(msg || 'Maximum attempts reached');
+        return; // Block starting the quiz
+      }
+      // Other errors: allow quiz UI but won’t persist
+    }
     setShowIntroduction(false);
     startQuiz(); // Start the timer when quiz begins
   };
@@ -226,6 +315,12 @@ export default function QuizAssessment() {
 
   // Show introduction screen
   if (showIntroduction) {
+    const attemptsForThis = Array.isArray(userAttempts)
+      ? userAttempts.filter((a) => a?.quiz?.id === assessmentId).length
+      : 0;
+    const attemptsLeft = assessment?.maxRetries > 0
+      ? Math.max((assessment?.maxRetries || 0) - attemptsForThis, 0)
+      : null;
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900 pt-16">
         {/* Theme Toggle */}
@@ -262,6 +357,12 @@ export default function QuizAssessment() {
                     <span className="text-gray-600 dark:text-gray-300">Maximum Retries:</span>
                     <span className="font-medium dark:text-white">{assessment.maxRetries}</span>
                   </div>
+                  {attemptsLeft !== null && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-300">Attempts Left:</span>
+                      <span className={`font-medium ${attemptsLeft === 0 ? 'text-red-400' : 'dark:text-white'}`}>{attemptsLeft}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -338,9 +439,11 @@ export default function QuizAssessment() {
               </button>
               <button
                 onClick={handleStartQuiz}
-                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium"
+                disabled={assessment?.maxRetries > 0 && attemptsLeft === 0}
+                className={`px-8 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors font-medium ${assessment?.maxRetries > 0 && attemptsLeft === 0 ? 'bg-gray-400 text-gray-100 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'}`}
+                title={assessment?.maxRetries > 0 && attemptsLeft === 0 ? 'Attempts exhausted' : 'Start Quiz'}
               >
-                Start Quiz
+                {assessment?.maxRetries > 0 && attemptsLeft === 0 ? 'Attempts Exhausted' : 'Start Quiz'}
               </button>
             </div>
           </div>
@@ -392,11 +495,11 @@ export default function QuizAssessment() {
           <ResultsHeader results={results} />
           {/* Only show QuestionSummary if showAnswers is enabled */}
           {assessment.showAnswers && (
-            <QuestionSummary
-              quizData={quizData}
-              results={results}
-              onResetQuiz={resetQuiz}
-            />
+          <QuestionSummary
+            quizData={quizData}
+            results={results}
+            onResetQuiz={resetQuiz}
+          />
           )}
           {/* Show retry option if maxRetries allows it */}
           {assessment.maxRetries > 1 && (
@@ -468,10 +571,10 @@ export default function QuizAssessment() {
       <div className="w-full bg-gray-50 dark:bg-slate-900 pt-4 mt-20">
         <div className="max-w-2xl mx-auto px-4">
           <div className="flex items-center justify-between mb-2">
-            <ProgressBar
-              currentQuestion={currentQuestion}
-              totalQuestions={totalQuestions}
-            />
+          <ProgressBar
+            currentQuestion={currentQuestion}
+            totalQuestions={totalQuestions}
+          />
             <Timer
               timeRemaining={timeRemaining}
               timingMode={timingMode}
@@ -500,3 +603,4 @@ export default function QuizAssessment() {
     </div>
   );
 }
+

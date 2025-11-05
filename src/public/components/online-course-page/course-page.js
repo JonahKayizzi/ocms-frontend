@@ -1,9 +1,9 @@
 'use client';
 
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import React, { useState, useMemo } from 'react';
 // Import via absolute path within src to satisfy CRA restriction
-import { useGetCourseByIdQuery, useGetModulesByCourseQuery, useGetLessonsByCourseQuery, useGetMaterialsByCourseQuery, useGetAssessmentsByCourseQuery, useGetEnrollmentCountQuery, useIsEnrolledQuery, useEnrollMutation, useSetLessonCompletedMutation, useGetCourseProgressQuery } from '../../../redux/apiSlice';
+import { useGetCourseByIdQuery, useGetModulesByCourseQuery, useGetLessonsByCourseQuery, useGetMaterialsByCourseQuery, useGetAssessmentsByCourseQuery, useGetEnrollmentCountQuery, useIsEnrolledQuery, useEnrollMutation, useSetLessonCompletedMutation, useGetCourseProgressQuery, useGetUserQuizAttemptsQuery } from '../../../redux/apiSlice';
 import { getToken, getUsernameFromToken, removeToken } from '../../../utils/jwtUtils';
 import CourseHeader from './course-header';
 import VideoSection from './video-section';
@@ -18,6 +18,7 @@ import LoginPage from '../../../pages/LoginPage';
 
 export default function CoursePage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const courseId = Number(id);
   const token = getToken();
   const username = token ? getUsernameFromToken(token) : null;
@@ -32,6 +33,7 @@ export default function CoursePage() {
   const { data: progressResp, refetch: refetchProgress } = useGetCourseProgressQuery({ courseId, participantId: username || '' }, { skip: !courseId || !username });
   const [enroll] = useEnrollMutation();
   const [setLessonCompleted] = useSetLessonCompletedMutation();
+  const { data: userAttempts = [] } = useGetUserQuizAttemptsQuery(username || '', { skip: !username });
 
   const title = course?.name || courseData.title;
   // Do not use dummy description as subtitle; keep header clean
@@ -124,6 +126,7 @@ export default function CoursePage() {
         onEnrollClick={handleEnroll}
         onLoginClick={handleLoginClick}
         onLogoutClick={handleLogout}
+        onBackClick={() => navigate('/dashboard')}
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -179,6 +182,8 @@ export default function CoursePage() {
               assessments={assessments}
               isEnrolled={isEnrolled}
               canTake={isEnrolled && progress.completion === 100}
+            participantId={username || ''}
+            attempts={userAttempts}
             />
             <DownloadableMaterials
               materials={downloadableMaterials}
