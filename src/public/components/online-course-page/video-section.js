@@ -10,6 +10,7 @@ export default function VideoSection({
   onPrev = () => {},
   onNext = () => {},
   onComplete = () => {},
+  disableComplete = false,
 }) {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -107,7 +108,8 @@ export default function VideoSection({
           <button
             type="button"
             onClick={onComplete}
-            className="ml-4 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+            disabled={disableComplete}
+            className={`ml-4 px-4 py-2 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${disableComplete ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500'}`}
           >
             Mark as completed
           </button>

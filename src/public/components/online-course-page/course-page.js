@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import React, { useState, useMemo } from 'react';
 // Import via absolute path within src to satisfy CRA restriction
 import { useGetCourseByIdQuery, useGetModulesByCourseQuery, useGetLessonsByCourseQuery, useGetMaterialsByCourseQuery, useGetAssessmentsByCourseQuery, useGetEnrollmentCountQuery, useIsEnrolledQuery, useEnrollMutation, useSetLessonCompletedMutation, useGetCourseProgressQuery, useGetUserQuizAttemptsQuery } from '../../../redux/apiSlice';
@@ -19,9 +19,13 @@ import LoginPage from '../../../pages/LoginPage';
 export default function CoursePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const courseId = Number(id);
   const token = getToken();
-  const username = token ? getUsernameFromToken(token) : null;
+  const usernameToken = token ? getUsernameFromToken(token) : null;
+  const search = new URLSearchParams(location.search);
+  // CRITICAL: If participantId is provided in URL, it should take precedence over token user
+  const username = (search.get('participantId') || usernameToken || '').toString() || null;
 
   const { data: course } = useGetCourseByIdQuery(courseId, { skip: !courseId });
   const { data: modules = [] } = useGetModulesByCourseQuery(courseId, { skip: !courseId });
@@ -29,7 +33,7 @@ export default function CoursePage() {
   const { data: materials = [] } = useGetMaterialsByCourseQuery(courseId, { skip: !courseId });
   const { data: assessments = [] } = useGetAssessmentsByCourseQuery(courseId, { skip: !courseId });
   const { data: enrollmentCountResp } = useGetEnrollmentCountQuery(courseId, { skip: !courseId });
-  const { data: enrolledResp, refetch: refetchEnrollment } = useIsEnrolledQuery({ courseId, participantId: username || '' }, { skip: !courseId });
+  const { data: enrolledResp, refetch: refetchEnrollment } = useIsEnrolledQuery({ courseId, participantId: username || '' }, { skip: !courseId || !username });
   const { data: progressResp, refetch: refetchProgress } = useGetCourseProgressQuery({ courseId, participantId: username || '' }, { skip: !courseId || !username });
   const [enroll] = useEnrollMutation();
   const [setLessonCompleted] = useSetLessonCompletedMutation();
@@ -171,6 +175,7 @@ export default function CoursePage() {
                   // Refetch progress to update the progress card
                   await refetchProgress();
                 }}
+                disableComplete={progress.completion >= 100}
               />
             )}
             <CourseOutline modules={outlineModules} />
