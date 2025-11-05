@@ -6,7 +6,6 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import HomePage from "./pages/HomePage";
 import UserDashboard from "./pages/UserDashboard";
 import CourseManagementDashboard from "./private/pages/publicContent/online-courses/course-management-dashboard";
-import CourseDetailPage from "./pages/CourseDetailPage";
 import LoginPage from "./pages/LoginPage";
 // Original app views (preserved names/structure)
 import CoursePage from "./public/components/online-course-page/course-page";
