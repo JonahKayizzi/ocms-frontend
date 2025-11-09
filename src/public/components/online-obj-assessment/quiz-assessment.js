@@ -243,6 +243,8 @@ export default function QuizAssessment() {
   const resetQuiz = () => {
     resetQuizLogic();
     setShowIntroduction(true);
+  setAttemptId(null);
+  persistedRef.current = false;
   };
 
   // Start quiz timer when user clicks "Start Quiz"
