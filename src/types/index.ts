@@ -33,6 +33,38 @@ export interface AssessmentResult {
   }>;
 }
 
+export interface QuizAttemptAnswer {
+  id?: number;
+  questionId: number;
+  questionText?: string;
+  question?: { id: number; text: string };
+  selectedOptionId?: number | null;
+  selectedOptionText?: string | null;
+  selectedAnswer?: number | string | null;
+  selectedAnswerText?: string | null;
+  correctOptionId?: number | null;
+  correctOptionText?: string | null;
+  correctAnswerText?: string | null;
+  isCorrect?: boolean;
+}
+
+export interface QuizAttempt {
+  id: number;
+  attemptNumber: number;
+  participantId: string;
+  participantName?: string;
+  participant?: { username?: string; fullName?: string };
+  quiz?: { id: number; name: string };
+  score: number;
+  totalQuestions: number;
+  percentage: number;
+  passed: boolean;
+  startedAt?: string;
+  completedAt?: string;
+  durationSeconds?: number;
+  answers?: QuizAttemptAnswer[];
+}
+
 // User Progress types
 export interface UserCourseProgress {
   courseId: number;

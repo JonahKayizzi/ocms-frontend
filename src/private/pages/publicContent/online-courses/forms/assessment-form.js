@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
-import { Plus, Edit, Trash2 } from 'lucide-react';
-import QuestionForm from './question-form';
+import React, { useState, useEffect } from "react";
+import PropTypes from "prop-types";
+import { Plus, Edit, Trash2 } from "lucide-react";
+import QuestionForm from "./question-form";
 import {
   useCreateAssessmentMutation,
   useUpdateAssessmentMutation,
@@ -10,7 +10,7 @@ import {
   useCreateBulkOptionsMutation,
   useGetQuestionsByAssessmentQuery,
   useGetOptionsByQuestionQuery,
-} from '../../../../../redux/apiSlice';
+} from "../../../../../redux/apiSlice";
 
 export default function AssessmentForm({
   assessment,
@@ -18,30 +18,30 @@ export default function AssessmentForm({
   onCancel,
   courseId,
 }) {
-  const [name, setName] = useState(assessment?.name || '');
-  const [description, setDescription] = useState(assessment?.description || '');
+  const [name, setName] = useState(assessment?.name || "");
+  const [description, setDescription] = useState(assessment?.description || "");
   const [questionsToPresent, setQuestionsToPresent] = useState(
-    assessment?.questionsToPresent || 0,
+    assessment?.questionsToPresent || 0
   );
   const [showAnswers, setShowAnswers] = useState(
-    assessment?.showAnswers !== undefined ? assessment.showAnswers : true,
+    assessment?.showAnswers !== undefined ? assessment.showAnswers : true
   );
   const [maxRetries, setMaxRetries] = useState(
-    assessment?.maxRetries !== undefined ? assessment.maxRetries : 3,
+    assessment?.maxRetries !== undefined ? assessment.maxRetries : 3
   );
   const [timingMode, setTimingMode] = useState(
-    assessment?.timingMode || 'none',
+    assessment?.timingMode || "none"
   );
   const [timeLimit, setTimeLimit] = useState(
-    assessment?.timeLimit !== undefined ? assessment.timeLimit : 30,
+    assessment?.timeLimit !== undefined ? assessment.timeLimit : 30
   );
   const [questionBank, setQuestionBank] = useState(
-    assessment?.questionBank || [],
+    assessment?.questionBank || []
   );
   const [showQuestionForm, setShowQuestionForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   // RTK Query mutations
   const [createAssessment] = useCreateAssessmentMutation();
@@ -51,9 +51,16 @@ export default function AssessmentForm({
   const [createBulkOptions] = useCreateBulkOptionsMutation();
 
   // Fetch existing questions when editing
-  const { data: existingQuestions = [], refetch: refetchQuestions, error: questionsError } = useGetQuestionsByAssessmentQuery(
-    assessment?.id, 
-    { skip: !assessment?.id }
+  const {
+    data: existingQuestionsData,
+    refetch: refetchQuestions,
+    error: questionsError,
+  } = useGetQuestionsByAssessmentQuery(assessment?.id, {
+    skip: !assessment?.id,
+  });
+  const existingQuestions = React.useMemo(
+    () => existingQuestionsData || [],
+    [existingQuestionsData]
   );
 
   useEffect(() => {
@@ -61,38 +68,40 @@ export default function AssessmentForm({
       setName(assessment.name);
       setDescription(assessment.description);
       setQuestionsToPresent(assessment.questionsToPresent);
-      
-      
+
       // Load existing questions from API if available, otherwise use assessment.questionBank
       if (existingQuestions.length > 0) {
         // Convert API questions to form format
-        const formattedQuestions = existingQuestions.map(q => ({
+        const formattedQuestions = existingQuestions.map((q) => ({
           id: q.id,
           text: q.text,
-          correctAnswer: '', // Will be loaded from options when editing
+          correctAnswer: "", // Will be loaded from options when editing
           optionsToPresent: q.optionsToPresent || 4,
-          imageDataUrl: q.imageDataUrl || '',
+          imageDataUrl: q.imageDataUrl || "",
           optionalAnswers: [], // Options will be loaded when editing individual questions
         }));
         setQuestionBank(formattedQuestions);
-      } else if (assessment.questionBank && assessment.questionBank.length > 0) {
+      } else if (
+        assessment.questionBank &&
+        assessment.questionBank.length > 0
+      ) {
         setQuestionBank(assessment.questionBank);
       } else {
         setQuestionBank([]);
       }
     } else {
-      setName('');
-      setDescription('');
+      setName("");
+      setDescription("");
       setQuestionsToPresent(0);
       setQuestionBank([]);
     }
-  }, [assessment, existingQuestions, questionsError]);
+  }, [assessment, existingQuestions]);
 
   const handleSave = async () => {
     if (isSaving) return; // Prevent multiple saves
 
     setIsSaving(true);
-    setError(''); // Clear any previous errors
+    setError(""); // Clear any previous errors
 
     try {
       // Prepare assessment data
@@ -122,7 +131,7 @@ export default function AssessmentForm({
         // Create new assessment
         const result = await createAssessment(assessmentData).unwrap();
         savedAssessment = result;
-        
+
         // Only create questions for new assessments
         await Promise.all(
           questionBank.map(async (question) => {
@@ -130,12 +139,12 @@ export default function AssessmentForm({
             const savedQuestion = await createQuestion({
               text: question.text,
               optionsToPresent: question.optionsToPresent || 4,
-              imageDataUrl: question.imageDataUrl || '',
+              imageDataUrl: question.imageDataUrl || "",
               assessment: { id: savedAssessment.id },
             }).unwrap();
 
             // Create options for this question
-            const options = question.optionalAnswers.map(optionText => ({
+            const options = question.optionalAnswers.map((optionText) => ({
               optionText,
               questionId: savedQuestion.id,
             }));
@@ -146,31 +155,38 @@ export default function AssessmentForm({
             }).unwrap();
 
             // Find the correct option and set isCorrect flag
-            const correctOption = savedOptions.find(option => option.optionText === question.correctAnswer);
+            const correctOption = savedOptions.find(
+              (option) => option.optionText === question.correctAnswer
+            );
             if (correctOption) {
               // Set the correct option using is_correct field
               try {
-                await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8091'}/question-options/${correctOption.id}`, {
-                  method: 'PUT',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({ isCorrect: true }),
-                });
+                await fetch(
+                  `${
+                    process.env.REACT_APP_API_URL || "http://localhost:8091"
+                  }/question-options/${correctOption.id}`,
+                  {
+                    method: "PUT",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ isCorrect: true }),
+                  }
+                );
               } catch (error) {
-                console.error('Error setting correct option:', error);
+                console.error("Error setting correct option:", error);
               }
             }
-          }),
+          })
         );
       }
 
       // Call the parent onSave callback with the saved assessment
       onSave(savedAssessment);
     } catch (error) {
-      console.error('Error saving assessment:', error);
+      console.error("Error saving assessment:", error);
       // Show error in UI instead of alert
-      setError('Error saving assessment. Please try again.');
+      setError("Error saving assessment. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -183,27 +199,32 @@ export default function AssessmentForm({
 
   const handleEditQuestion = async (question) => {
     // If editing an existing question from API, load its options
-    if (question.id && typeof question.id === 'number') {
+    if (question.id && typeof question.id === "number") {
       try {
         // Load options for this question
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8091'}/question-options/question/${question.id}`);
-        
+        const response = await fetch(
+          `${
+            process.env.REACT_APP_API_URL || "http://localhost:8091"
+          }/question-options/question/${question.id}`
+        );
+
         if (response.ok) {
           const options = await response.json();
-          
+
           if (options.length > 0) {
             const questionWithOptions = {
               ...question,
-              optionalAnswers: options.map(opt => opt.optionText),
-              correctAnswer: options.find(opt => opt.isCorrect === true)?.optionText || '',
+              optionalAnswers: options.map((opt) => opt.optionText),
+              correctAnswer:
+                options.find((opt) => opt.isCorrect === true)?.optionText || "",
             };
             setEditingQuestion(questionWithOptions);
           } else {
             // If no options exist, create a question with empty options for editing
             const questionWithEmptyOptions = {
               ...question,
-              optionalAnswers: ['', ''],
-              correctAnswer: '',
+              optionalAnswers: ["", ""],
+              correctAnswer: "",
             };
             setEditingQuestion(questionWithEmptyOptions);
           }
@@ -211,7 +232,7 @@ export default function AssessmentForm({
           setEditingQuestion(question);
         }
       } catch (error) {
-        console.error('Error loading question options:', error);
+        console.error("Error loading question options:", error);
         setEditingQuestion(question);
       }
     } else {
@@ -227,7 +248,7 @@ export default function AssessmentForm({
   const handleSaveQuestion = (newQuestion) => {
     if (newQuestion.id) {
       setQuestionBank(
-        questionBank.map((q) => (q.id === newQuestion.id ? newQuestion : q)),
+        questionBank.map((q) => (q.id === newQuestion.id ? newQuestion : q))
       );
     } else {
       setQuestionBank([
@@ -242,23 +263,29 @@ export default function AssessmentForm({
     setShowQuestionForm(false);
   };
 
-  const cardClass = 'bg-white rounded-lg shadow p-6';
-  const cardHeaderClass = 'mb-4';
-  const cardTitleClass = 'text-2xl font-bold text-gray-800';
-  const cardDescriptionClass = 'text-gray-600 mt-1';
-  const formGroupClass = 'grid gap-2';
-  const labelClass = 'block text-sm font-medium text-gray-700';
-  const inputClass = 'mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm';
+  const cardClass = "bg-white rounded-lg shadow p-6";
+  const cardHeaderClass = "mb-4";
+  const cardTitleClass = "text-2xl font-bold text-gray-800";
+  const cardDescriptionClass = "text-gray-600 mt-1";
+  const formGroupClass = "grid gap-2";
+  const labelClass = "block text-sm font-medium text-gray-700";
+  const inputClass =
+    "mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm";
   const textareaClass = `${inputClass} min-h-[80px]`;
-  const buttonGroupClass = 'flex justify-end gap-2 mt-6';
-  const primaryButtonClass = 'px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200';
-  const ghostButtonClass = 'px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200';
-  const tableClass = 'min-w-full divide-y divide-gray-200';
-  const tableHeaderClass = 'bg-gray-900';
-  const tableHeadClass = 'px-6 py-3 text-left text-xs font-semibold text-gray-100 uppercase tracking-wider';
-  const tableCellClass = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900';
-  const actionButtonClass = 'p-2 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500';
-  const smallButtonClass = 'px-3 py-1 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 flex items-center';
+  const buttonGroupClass = "flex justify-end gap-2 mt-6";
+  const primaryButtonClass =
+    "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200";
+  const ghostButtonClass =
+    "px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200";
+  const tableClass = "min-w-full divide-y divide-gray-200";
+  const tableHeaderClass = "bg-gray-900";
+  const tableHeadClass =
+    "px-6 py-3 text-left text-xs font-semibold text-gray-100 uppercase tracking-wider";
+  const tableCellClass = "px-6 py-4 whitespace-nowrap text-sm text-gray-900";
+  const actionButtonClass =
+    "p-2 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const smallButtonClass =
+    "px-3 py-1 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 flex items-center";
 
   if (showQuestionForm) {
     return (
@@ -275,7 +302,7 @@ export default function AssessmentForm({
     <div className={cardClass}>
       <div className={cardHeaderClass}>
         <h2 className={cardTitleClass}>
-          {assessment ? 'Edit Assessment' : 'Create New Assessment'}
+          {assessment ? "Edit Assessment" : "Create New Assessment"}
         </h2>
         <p className={cardDescriptionClass}>
           Manage the details and question bank for this assessment.
@@ -284,9 +311,9 @@ export default function AssessmentForm({
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
           <p className="text-red-700 text-sm">{error}</p>
-          <button 
-            type="button" 
-            onClick={() => setError('')}
+          <button
+            type="button"
+            onClick={() => setError("")}
             className="text-red-600 hover:text-red-800 text-xs underline mt-1"
           >
             Dismiss
@@ -332,22 +359,22 @@ export default function AssessmentForm({
                 id="questions-to-present"
                 type="number"
                 value={questionsToPresent}
-                onChange={(e) => setQuestionsToPresent(
-                  Math.max(
-                    0,
-                    Math.min(questionBank.length, Number(e.target.value)),
-                  ),
-                )}
+                onChange={(e) =>
+                  setQuestionsToPresent(
+                    Math.max(
+                      0,
+                      Math.min(questionBank.length, Number(e.target.value))
+                    )
+                  )
+                }
                 placeholder="e.g., 15"
                 min="0"
                 max={questionBank.length}
                 className={inputClass}
               />
               <p className="text-sm text-gray-500">
-                Enter how many questions will be randomly selected from the bank for
-                each user attempt. Max:
-                {' '}
-                {questionBank.length}
+                Enter how many questions will be randomly selected from the bank
+                for each user attempt. Max: {questionBank.length}
               </p>
             </div>
 
@@ -359,14 +386,17 @@ export default function AssessmentForm({
                 id="max-retries"
                 type="number"
                 value={maxRetries}
-                onChange={(e) => setMaxRetries(Math.max(1, Number(e.target.value)))}
+                onChange={(e) =>
+                  setMaxRetries(Math.max(1, Number(e.target.value)))
+                }
                 placeholder="e.g., 3"
                 min="1"
                 max="10"
                 className={inputClass}
               />
               <p className="text-sm text-gray-500">
-                Number of times a user can retake this quiz. Set to 1 for no retries allowed.
+                Number of times a user can retake this quiz. Set to 1 for no
+                retries allowed.
               </p>
             </div>
           </div>
@@ -376,11 +406,10 @@ export default function AssessmentForm({
             <div className={formGroupClass}>
               <div className="flex items-center justify-between">
                 <div>
-                  <span className={labelClass}>
-                    Show Answers After Quiz
-                  </span>
+                  <span className={labelClass}>Show Answers After Quiz</span>
                   <p className="text-sm text-gray-500 mt-1">
-                    When enabled, users will see correct answers and explanations after completing the quiz
+                    When enabled, users will see correct answers and
+                    explanations after completing the quiz
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -396,9 +425,7 @@ export default function AssessmentForm({
             </div>
 
             <div className={formGroupClass}>
-              <span className={labelClass}>
-                Quiz Timing
-              </span>
+              <span className={labelClass}>Quiz Timing</span>
               <div className="space-y-4">
                 <div className="flex flex-col space-y-2">
                   <label className="flex items-center">
@@ -406,7 +433,7 @@ export default function AssessmentForm({
                       type="radio"
                       name="timingMode"
                       value="none"
-                      checked={timingMode === 'none'}
+                      checked={timingMode === "none"}
                       onChange={(e) => setTimingMode(e.target.value)}
                       className="mr-2"
                     />
@@ -417,7 +444,7 @@ export default function AssessmentForm({
                       type="radio"
                       name="timingMode"
                       value="quiz"
-                      checked={timingMode === 'quiz'}
+                      checked={timingMode === "quiz"}
                       onChange={(e) => setTimingMode(e.target.value)}
                       className="mr-2"
                     />
@@ -428,37 +455,43 @@ export default function AssessmentForm({
                       type="radio"
                       name="timingMode"
                       value="question"
-                      checked={timingMode === 'question'}
+                      checked={timingMode === "question"}
                       onChange={(e) => setTimingMode(e.target.value)}
                       className="mr-2"
                     />
                     <span className="text-sm">Time per Question</span>
                   </label>
                 </div>
-                
-                {timingMode !== 'none' && (
+
+                {timingMode !== "none" && (
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-gray-600">
-                      {timingMode === 'quiz' ? 'Time Limit (minutes):' : 'Time per Question (seconds):'}
+                      {timingMode === "quiz"
+                        ? "Time Limit (minutes):"
+                        : "Time per Question (seconds):"}
                     </span>
                     <input
                       type="number"
                       value={timeLimit}
-                      onChange={(e) => setTimeLimit(Math.max(1, Number(e.target.value)))}
+                      onChange={(e) =>
+                        setTimeLimit(Math.max(1, Number(e.target.value)))
+                      }
                       min="1"
-                      max={timingMode === 'quiz' ? '180' : '300'}
+                      max={timingMode === "quiz" ? "180" : "300"}
                       className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
                     />
                     <span className="text-xs text-gray-500">
-                      {timingMode === 'quiz' ? 'Max: 180 min' : 'Max: 300 sec'}
+                      {timingMode === "quiz" ? "Max: 180 min" : "Max: 300 sec"}
                     </span>
                   </div>
                 )}
-                
+
                 <p className="text-sm text-gray-500">
-                  {timingMode === 'none' && 'Quiz has no time restrictions.'}
-                  {timingMode === 'quiz' && `Quiz will auto-submit after ${timeLimit} minute(s).`}
-                  {timingMode === 'question' && `Each question will auto-advance after ${timeLimit} second(s).`}
+                  {timingMode === "none" && "Quiz has no time restrictions."}
+                  {timingMode === "quiz" &&
+                    `Quiz will auto-submit after ${timeLimit} minute(s).`}
+                  {timingMode === "question" &&
+                    `Each question will auto-advance after ${timeLimit} second(s).`}
                 </p>
               </div>
             </div>
@@ -469,10 +502,7 @@ export default function AssessmentForm({
         <div className="grid gap-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-800">
-              Question Bank (
-              {questionBank.length}
-              {' '}
-              questions)
+              Question Bank ({questionBank.length} questions)
             </h3>
             <div className="flex items-center space-x-4">
               {assessment?.id && (
@@ -484,10 +514,12 @@ export default function AssessmentForm({
                   Refresh Questions
                 </button>
               )}
-              <button type="button" className={smallButtonClass} onClick={handleAddQuestion}>
-                <Plus className="mr-2 h-4 w-4" />
-                {' '}
-                Add Question
+              <button
+                type="button"
+                className={smallButtonClass}
+                onClick={handleAddQuestion}
+              >
+                <Plus className="mr-2 h-4 w-4" /> Add Question
               </button>
             </div>
           </div>
@@ -556,11 +588,13 @@ export default function AssessmentForm({
           </button>
           <button
             type="button"
-            className={`${primaryButtonClass} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`${primaryButtonClass} ${
+              isSaving ? "opacity-50 cursor-not-allowed" : ""
+            }`}
             onClick={handleSave}
             disabled={isSaving}
           >
-            {isSaving ? 'Saving...' : 'Save Assessment'}
+            {isSaving ? "Saving..." : "Save Assessment"}
           </button>
         </div>
       </div>
@@ -575,14 +609,14 @@ AssessmentForm.propTypes = {
     questionsToPresent: PropTypes.number,
     showAnswers: PropTypes.bool,
     maxRetries: PropTypes.number,
-    timingMode: PropTypes.oneOf(['none', 'quiz', 'question']),
+    timingMode: PropTypes.oneOf(["none", "quiz", "question"]),
     timeLimit: PropTypes.number,
     questionBank: PropTypes.arrayOf(
       PropTypes.shape({
         id: PropTypes.string.isRequired,
         text: PropTypes.string.isRequired,
         correctAnswer: PropTypes.string.isRequired,
-      }),
+      })
     ),
   }),
   onSave: PropTypes.func.isRequired,
