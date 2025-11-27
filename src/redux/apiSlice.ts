@@ -12,6 +12,7 @@ import type {
   AssessmentFormData,
   QuestionFormData,
   UserCourseProgress,
+  QuizAttempt,
 } from "../types";
 
 // Base query with token handling
@@ -50,17 +51,54 @@ export const apiSlice = createApi({
   ],
   endpoints: (builder) => ({
     // Quiz attempts
-    startQuizAttempt: builder.mutation<{ attemptId: number; attemptNumber: number; maxRetries: number }, { quizId: number; participantId: string }>({
+    startQuizAttempt: builder.mutation<
+      { attemptId: number; attemptNumber: number; maxRetries: number },
+      { quizId: number; participantId: string }
+    >({
       query: (body) => ({ url: "/quiz-attempts/start", method: "POST", body }),
     }),
-    recordQuizAnswer: builder.mutation<void, { attemptId: number; questionId: number; answerId: number | null; participantId: string; correct: boolean }>({
+    recordQuizAnswer: builder.mutation<
+      void,
+      {
+        attemptId: number;
+        questionId: number;
+        answerId: number | null;
+        participantId: string;
+        correct: boolean;
+      }
+    >({
       query: (body) => ({ url: "/quiz-attempts/answer", method: "POST", body }),
     }),
-    finishQuizAttempt: builder.mutation<{ attemptId: number; score: number; total: number; percentage: number; passed: boolean }, { attemptId: number }>({
+    finishQuizAttempt: builder.mutation<
+      {
+        attemptId: number;
+        score: number;
+        total: number;
+        percentage: number;
+        passed: boolean;
+      },
+      { attemptId: number }
+    >({
       query: (body) => ({ url: "/quiz-attempts/finish", method: "POST", body }),
     }),
-    getUserQuizAttempts: builder.query<any[], string>({
-      query: (participantId) => `/quiz-attempts/user/${encodeURIComponent(participantId)}`,
+    getUserQuizAttempts: builder.query<QuizAttempt[], string>({
+      query: (participantId) =>
+        `/quiz-attempts/user/${encodeURIComponent(participantId)}`,
+      providesTags: (result, error, participantId) => [
+        { type: "AssessmentResult", participantId },
+      ],
+    }),
+    getQuizAttemptsByAssessment: builder.query<QuizAttempt[], number>({
+      query: (assessmentId) => `/quiz-attempts/assessment/${assessmentId}`,
+      providesTags: (result, error, assessmentId) => [
+        { type: "AssessmentResult", assessmentId },
+      ],
+    }),
+    getQuizAttemptById: builder.query<QuizAttempt, number>({
+      query: (attemptId) => `/quiz-attempts/${attemptId}`,
+      providesTags: (result, error, attemptId) => [
+        { type: "AssessmentResult", attemptId },
+      ],
     }),
     // Course endpoints
     getCourses: builder.query<Course[], void>({
@@ -548,6 +586,9 @@ export const {
   useRecordQuizAnswerMutation,
   useFinishQuizAttemptMutation,
   useGetUserQuizAttemptsQuery,
+  useGetQuizAttemptsByAssessmentQuery,
+  useGetQuizAttemptByIdQuery,
+  useLazyGetQuizAttemptByIdQuery,
 
   // User Dashboard hooks
   useGetCoursesByDepartmentQuery,
