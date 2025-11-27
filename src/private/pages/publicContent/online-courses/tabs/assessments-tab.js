@@ -1,5 +1,8 @@
 import React, { useMemo, useState, useEffect } from "react";
 import PropTypes from "prop-types";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 import {
   Plus,
   Edit,
@@ -17,6 +20,10 @@ import {
   UserCircle,
   CalendarClock,
   Timer,
+  Download,
+  FileText,
+  Table,
+  Award,
 } from "lucide-react";
 import AssessmentForm from "../forms/assessment-form";
 import {
@@ -284,7 +291,7 @@ const formatDuration = (seconds) => {
 function AssessmentResultsPanel({ assessment, onClose }) {
   const assessmentId = assessment?.id;
   const {
-    data: attempts = [],
+    data: analyticsData,
     isFetching,
     isError,
     error,
@@ -297,6 +304,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
   const [attemptDetailErrors, setAttemptDetailErrors] = useState({});
   const [loadingAttemptId, setLoadingAttemptId] = useState(null);
   const [expandedAttemptId, setExpandedAttemptId] = useState(null);
+  const [activeTab, setActiveTab] = useState("detailed"); // "detailed" or "summary"
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -310,9 +318,178 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     };
   }, [onClose]);
 
-  const attemptList = Array.isArray(attempts) ? attempts : [];
+  // Extract attempts array and analytics from the new response format
+  const attemptList = analyticsData?.attempts || [];
+  const analytics = analyticsData || {};
+
+  // Calculate summarized performance (best attempt per user)
+  const summarizedPerformance = useMemo(() => {
+    const userBestAttempts = {};
+    
+    attemptList.forEach(attempt => {
+      const userId = attempt.participantId;
+      const percentage = attempt.percentage || 0;
+      
+      if (!userBestAttempts[userId] || percentage > userBestAttempts[userId].percentage) {
+        userBestAttempts[userId] = {
+          participantId: userId,
+          bestAttempt: attempt,
+          percentage: percentage,
+          score: attempt.score,
+          totalQuestions: attempt.totalQuestions,
+          passed: attempt.passed,
+          completedAt: attempt.completedAt,
+          attemptNumber: attempt.attemptNumber,
+          totalAttempts: attemptList.filter(a => a.participantId === userId).length
+        };
+      }
+    });
+    
+    return Object.values(userBestAttempts).sort((a, b) => b.percentage - a.percentage);
+  }, [attemptList]);
+
+  // Export functions
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Assessment Results: ${assessment?.name || 'Assessment'}`, 14, 20);
+    
+    // Assessment info
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Assessment: ${assessment?.name || 'N/A'}`, 14, 35);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 45);
+    
+    // Statistics
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text('Overall Statistics', 14, 65);
+    
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    const statsData = [
+      ['Total Attempts', summary.totalAttempts.toString()],
+      ['Unique Participants', summary.participants.toString()],
+      ['Average Score', `${summary.avgScore}%`],
+      ['Pass Rate', `${summary.passRate}%`]
+    ];
+    
+    autoTable(doc, {
+      startY: 75,
+      head: [['Metric', 'Value']],
+      body: statsData,
+      theme: 'grid',
+      headStyles: { fillColor: [59, 130, 246] },
+      margin: { left: 14 }
+    });
+    
+    // Summary Performance
+    let summaryStartY = 140; // Fixed position to avoid finalY issues
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text('Best Performance Summary', 14, summaryStartY);
+    
+    const summaryTableData = summarizedPerformance.map((user, index) => [
+      (index + 1).toString(),
+      user.participantId,
+      `${user.score}/${user.totalQuestions}`,
+      `${user.percentage}%`,
+      user.passed ? 'Pass' : 'Fail',
+      user.totalAttempts.toString(),
+      new Date(user.completedAt).toLocaleDateString()
+    ]);
+    
+    autoTable(doc, {
+      startY: summaryStartY + 10,
+      head: [['Rank', 'Participant', 'Score', 'Percentage', 'Status', 'Total Attempts', 'Date']],
+      body: summaryTableData,
+      theme: 'striped',
+      headStyles: { fillColor: [59, 130, 246] },
+      margin: { left: 14 },
+      columnStyles: {
+        3: { halign: 'center' },
+        4: { halign: 'center' },
+        5: { halign: 'center' }
+      }
+    });
+    
+    // Save the PDF
+    doc.save(`${assessment?.name || 'Assessment'}_Results_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  const exportToExcel = () => {
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Statistics sheet
+    const statsData = [
+      ['Assessment Results Report'],
+      [''],
+      ['Assessment:', assessment?.name || 'N/A'],
+      ['Generated:', new Date().toLocaleDateString()],
+      [''],
+      ['Overall Statistics'],
+      ['Total Attempts', summary.totalAttempts],
+      ['Unique Participants', summary.participants],
+      ['Average Score', `${summary.avgScore}%`],
+      ['Pass Rate', `${summary.passRate}%`]
+    ];
+    
+    const statsWs = XLSX.utils.aoa_to_sheet(statsData);
+    XLSX.utils.book_append_sheet(wb, statsWs, 'Statistics');
+    
+    // Summary Performance sheet
+    const summaryHeaders = ['Rank', 'Participant ID', 'Score', 'Total Questions', 'Percentage', 'Status', 'Total Attempts', 'Best Attempt Date'];
+    const summaryData = summarizedPerformance.map((user, index) => [
+      index + 1,
+      user.participantId,
+      user.score,
+      user.totalQuestions,
+      `${user.percentage}%`,
+      user.passed ? 'Pass' : 'Fail',
+      user.totalAttempts,
+      new Date(user.completedAt).toLocaleDateString()
+    ]);
+    
+    const summaryWs = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryData]);
+    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary Performance');
+    
+    // Detailed Attempts sheet
+    const detailedHeaders = ['Participant ID', 'Attempt Number', 'Score', 'Total Questions', 'Percentage', 'Status', 'Started At', 'Completed At', 'Duration (min)'];
+    const detailedData = attemptList.map(attempt => [
+      attempt.participantId,
+      attempt.attemptNumber,
+      attempt.score,
+      attempt.totalQuestions,
+      `${attempt.percentage}%`,
+      attempt.passed ? 'Pass' : 'Fail',
+      new Date(attempt.startedAt).toLocaleString(),
+      new Date(attempt.completedAt).toLocaleString(),
+      attempt.durationMinutes || 0
+    ]);
+    
+    const detailedWs = XLSX.utils.aoa_to_sheet([detailedHeaders, ...detailedData]);
+    XLSX.utils.book_append_sheet(wb, detailedWs, 'All Attempts');
+    
+    // Save the Excel file
+    XLSX.writeFile(wb, `${assessment?.name || 'Assessment'}_Results_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
   const summary = useMemo(() => {
+    // Use analytics data from backend if available, otherwise calculate from attempts
+    if (analytics.totalAttempts !== undefined) {
+      return {
+        totalAttempts: analytics.totalAttempts || 0,
+        participants: analytics.uniqueParticipants || 0,
+        avgScore: Math.round(analytics.averageScore || 0),
+        passRate: Math.round(analytics.passRate || 0),
+      };
+    }
+    
+    // Fallback to frontend calculation if analytics not available
     if (attemptList.length === 0) {
       return {
         totalAttempts: 0,
@@ -342,7 +519,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       avgScore,
       passRate,
     };
-  }, [attemptList]);
+  }, [attemptList, analytics]);
 
   const handleOverlayClick = (event) => {
     if (event.target === event.currentTarget) onClose();
@@ -366,6 +543,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     setExpandedAttemptId(isClosing ? null : attemptId);
     if (isClosing) return;
     const hasAnswers =
+      attemptDetails[attemptId]?.questionPerformances?.length ||
       attemptDetails[attemptId]?.answers?.length ||
       attemptList.find((a) => a.id === attemptId)?.answers?.length;
     if (!hasAnswers) {
@@ -401,8 +579,25 @@ function AssessmentResultsPanel({ assessment, onClose }) {
   ];
 
   const renderAttemptAnswers = (attempt) => {
-    const answers =
-      attemptDetails[attempt.id]?.answers || attempt.answers || [];
+    // Handle both new format (questionPerformances) and legacy format (answers)
+    const questionPerformances = attemptDetails[attempt.id]?.questionPerformances || [];
+    const legacyAnswers = attemptDetails[attempt.id]?.answers || attempt.answers || [];
+    
+    // Convert questionPerformances to the expected answers format
+    const answers = questionPerformances.length > 0 
+      ? questionPerformances.map(perf => ({
+          questionId: perf.questionId,
+          questionText: perf.questionText,
+          selectedAnswerId: perf.selectedAnswerId,
+          selectedAnswerText: perf.selectedAnswerText || (perf.selectedAnswerId ? 
+            perf.options?.find(opt => opt.id === perf.selectedAnswerId)?.text : "No answer"),
+          correctAnswerId: perf.correctAnswerId,
+          correctAnswerText: perf.correctAnswerText,
+          isCorrect: perf.correct,
+          options: perf.options || []
+        }))
+      : legacyAnswers;
+    
     if (loadingAttemptId === attempt.id) {
       return (
         <div className="flex items-center justify-center py-6 text-gray-500">
@@ -574,22 +769,65 @@ function AssessmentResultsPanel({ assessment, onClose }) {
             </div>
           ))}
         </div>
+        {/* Tab Navigation */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <div className="border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-            <p className="text-sm font-semibold text-gray-700">
-              {attemptList.length} attempt
-              {attemptList.length === 1 ? "" : "s"}
-              recorded
-            </p>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              className="text-sm text-blue-600 hover:text-blue-800 font-semibold"
-            >
-              Refresh
-            </button>
+          <div className="border-b border-gray-200">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex space-x-8">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("detailed")}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === "detailed"
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  Detailed View ({attemptList.length} attempts)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("summary")}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === "summary"
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  Summary View ({summarizedPerformance.length} users)
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <FileText className="h-4 w-4" />
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={exportToExcel}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Table className="h-4 w-4" />
+                  Export Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => refetch()}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-semibold"
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="divide-y divide-gray-200">
+
+          {/* Tab Content */}
+          {activeTab === "detailed" ? (
+            <div className="divide-y divide-gray-200">
             {attemptList.map((attempt) => {
               const participantName =
                 attempt.participantName ||
@@ -667,7 +905,105 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                 </div>
               );
             })}
-          </div>
+            </div>
+          ) : (
+            /* Summary View */
+            <div className="p-6">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Best Performance Summary
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Showing the best attempt for each participant, ranked by performance.
+                </p>
+              </div>
+              
+              {summarizedPerformance.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No performance data available.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Rank
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Participant
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Best Score
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Percentage
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Total Attempts
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Best Attempt Date
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {summarizedPerformance.map((user, index) => (
+                        <tr key={user.participantId} className={index < 3 ? "bg-yellow-50" : ""}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              {index === 0 && <Award className="h-5 w-5 text-yellow-500 mr-2" />}
+                              {index === 1 && <Award className="h-5 w-5 text-gray-400 mr-2" />}
+                              {index === 2 && <Award className="h-5 w-5 text-amber-600 mr-2" />}
+                              <span className="text-sm font-medium text-gray-900">
+                                #{index + 1}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <UserCircle className="h-8 w-8 text-gray-400 mr-3" />
+                              <span className="text-sm font-medium text-gray-900">
+                                {user.participantId}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {user.score}/{user.totalQuestions}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              user.percentage >= 80 ? "bg-green-100 text-green-800" :
+                              user.percentage >= 60 ? "bg-yellow-100 text-yellow-800" :
+                              "bg-red-100 text-red-800"
+                            }`}>
+                              {user.percentage}%
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              user.passed ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                            }`}>
+                              {user.passed ? "Pass" : "Fail"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {user.totalAttempts}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(user.completedAt).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </>
     );

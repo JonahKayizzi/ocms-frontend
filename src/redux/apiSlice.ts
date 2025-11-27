@@ -88,7 +88,13 @@ export const apiSlice = createApi({
         { type: "AssessmentResult", participantId },
       ],
     }),
-    getQuizAttemptsByAssessment: builder.query<QuizAttempt[], number>({
+    getQuizAttemptsByAssessment: builder.query<{
+      totalAttempts: number;
+      uniqueParticipants: number;
+      averageScore: number;
+      passRate: number;
+      attempts: QuizAttempt[];
+    }, number>({
       query: (assessmentId) => `/quiz-attempts/assessment/${assessmentId}`,
       providesTags: (result, error, assessmentId) => [
         { type: "AssessmentResult", assessmentId },
