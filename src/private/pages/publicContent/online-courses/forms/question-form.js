@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { Plus, X } from "lucide-react";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 import {
   useCreateQuestionMutation,
   useUpdateQuestionMutation,
@@ -14,8 +16,18 @@ export default function QuestionForm({
   onSave,
   onCancel,
   assessmentId,
+  assessmentTimingMode, // Pass timing mode from parent to show structuredTimeLimit field
 }) {
   const [text, setText] = useState(question?.text || "");
+  const [questionType, setQuestionType] = useState(
+    question?.questionType || "multiple_choice"
+  );
+  const [isMandatory, setIsMandatory] = useState(
+    question?.isMandatory !== undefined ? question.isMandatory : true
+  );
+  const [structuredTimeLimit, setStructuredTimeLimit] = useState(
+    question?.structuredTimeLimit || 300 // Default 5 minutes
+  );
   const [correctOptionIndex, setCorrectOptionIndex] = useState(0);
   const [optionalAnswers, setOptionalAnswers] = useState(
     question?.optionalAnswers || ["", ""]
@@ -41,6 +53,21 @@ export default function QuestionForm({
   const [loadedOptions, setLoadedOptions] = useState([]);
   const [questionSaved, setQuestionSaved] = useState(false); // Track if question is saved
 
+  // Rich text editor modules
+  const quillModules = {
+    toolbar: [
+      [{ header: [1, 2, 3, false] }],
+      ["bold", "italic", "underline", "strike"],
+      [{ list: "ordered" }, { list: "bullet" }],
+      [{ indent: "-1" }, { indent: "+1" }],
+      ["blockquote", "code-block"],
+      [{ color: [] }, { background: [] }],
+      [{ align: [] }],
+      ["link", "image"],
+      ["clean"],
+    ],
+  };
+
   // RTK Query mutations
   const [createQuestion] = useCreateQuestionMutation();
   const [updateQuestion] = useUpdateQuestionMutation();
@@ -49,6 +76,11 @@ export default function QuestionForm({
   useEffect(() => {
     if (question) {
       setText(question.text);
+      setQuestionType(question.questionType || "multiple_choice");
+      setIsMandatory(
+        question.isMandatory !== undefined ? question.isMandatory : true
+      );
+      setStructuredTimeLimit(question.structuredTimeLimit || 300);
       // Find the correct option index from loaded options
       const correctOption = question.options?.find(
         (opt) => opt.isCorrect === true
@@ -80,6 +112,9 @@ export default function QuestionForm({
       setQuestionSaved(true); // Existing question is already saved
     } else {
       setText("");
+      setQuestionType("multiple_choice");
+      setIsMandatory(true);
+      setStructuredTimeLimit(300);
       setCorrectOptionIndex(0);
       setOptionalAnswers(["", ""]);
       setOptionsToPresent(2);
@@ -315,6 +350,13 @@ export default function QuestionForm({
             text,
             optionsToPresent: clampedOptionsToPresent,
             imageDataUrl,
+            questionType,
+            isMandatory,
+            structuredTimeLimit:
+              questionType === "structured" &&
+              assessmentTimingMode === "question"
+                ? structuredTimeLimit
+                : undefined,
           },
         }).unwrap();
 
@@ -326,6 +368,12 @@ export default function QuestionForm({
           text,
           optionsToPresent: clampedOptionsToPresent,
           imageDataUrl,
+          questionType,
+          isMandatory,
+          structuredTimeLimit:
+            questionType === "structured" && assessmentTimingMode === "question"
+              ? structuredTimeLimit
+              : undefined,
           assessment: { id: assessmentId },
         }).unwrap();
 
@@ -372,8 +420,14 @@ export default function QuestionForm({
       const filteredOptionalAnswers = optionalAnswers.filter(
         (option) => option.trim() !== ""
       );
-      if (filteredOptionalAnswers.length < 2) {
-        setError("At least 2 answer options are required");
+      // Only require options for multiple choice questions
+      if (
+        questionType === "multiple_choice" &&
+        filteredOptionalAnswers.length < 2
+      ) {
+        setError(
+          "At least 2 answer options are required for multiple choice questions"
+        );
         return;
       }
 
@@ -541,8 +595,14 @@ export default function QuestionForm({
       const filteredOptionalAnswers = optionalAnswers.filter(
         (option) => option.trim() !== ""
       );
-      if (filteredOptionalAnswers.length < 2) {
-        setError("At least 2 answer options are required");
+      // Only require options for multiple choice questions
+      if (
+        questionType === "multiple_choice" &&
+        filteredOptionalAnswers.length < 2
+      ) {
+        setError(
+          "At least 2 answer options are required for multiple choice questions"
+        );
         return;
       }
 
@@ -572,6 +632,13 @@ export default function QuestionForm({
             // No correctOptionId field needed anymore
             optionsToPresent: clampedOptionsToPresent,
             imageDataUrl,
+            questionType,
+            isMandatory,
+            structuredTimeLimit:
+              questionType === "structured" &&
+              assessmentTimingMode === "question"
+                ? structuredTimeLimit
+                : undefined,
           },
         }).unwrap();
 
@@ -677,6 +744,12 @@ export default function QuestionForm({
           // No correctOptionId field needed anymore
           optionsToPresent: clampedOptionsToPresent,
           imageDataUrl,
+          questionType,
+          isMandatory,
+          structuredTimeLimit:
+            questionType === "structured" && assessmentTimingMode === "question"
+              ? structuredTimeLimit
+              : undefined,
           assessment: { id: assessmentId },
         }).unwrap();
 
@@ -840,17 +913,99 @@ export default function QuestionForm({
         </div>
       )}
       <div className="grid gap-6">
+        {/* Question Type Selection */}
+        <div className={formGroupClass}>
+          <span htmlFor="question-type" className={labelClass}>
+            Question Type
+          </span>
+          <select
+            id="question-type"
+            value={questionType}
+            onChange={(e) => setQuestionType(e.target.value)}
+            className={inputClass}
+          >
+            <option value="multiple_choice">Multiple Choice</option>
+            <option value="structured">Structured (Text/Paragraph)</option>
+          </select>
+          <p className="text-sm text-gray-500">
+            {questionType === "structured"
+              ? "Participants will respond with text in a rich text area"
+              : "Participants will select from multiple choice options"}
+          </p>
+        </div>
+
+        {/* Mandatory/Optional Selection */}
+        <div className={formGroupClass}>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="is-mandatory"
+              checked={isMandatory}
+              onChange={(e) => setIsMandatory(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="is-mandatory" className={labelClass}>
+              Mandatory Question
+            </label>
+          </div>
+          <p className="text-sm text-gray-500">
+            {isMandatory
+              ? "This question will always appear in the quiz"
+              : "This question may be randomly selected to appear in the quiz"}
+          </p>
+        </div>
+
+        {/* Structured Time Limit (only shown for structured questions when timing mode is per-question) */}
+        {questionType === "structured" &&
+          assessmentTimingMode === "question" && (
+            <div className={formGroupClass}>
+              <span htmlFor="structured-time-limit" className={labelClass}>
+                Time Limit for This Question (seconds)
+              </span>
+              <input
+                id="structured-time-limit"
+                type="number"
+                value={structuredTimeLimit}
+                onChange={(e) =>
+                  setStructuredTimeLimit(
+                    Math.max(30, parseInt(e.target.value) || 300)
+                  )
+                }
+                min="30"
+                placeholder="300"
+                className={inputClass}
+              />
+              <p className="text-sm text-gray-500">
+                Time limit in seconds for this structured question (minimum 30
+                seconds)
+              </p>
+            </div>
+          )}
+
         <div className={formGroupClass}>
           <span htmlFor="question-text" className={labelClass}>
             Question
           </span>
-          <textarea
-            id="question-text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Enter the question here..."
-            className={textareaClass}
-          />
+          {questionType === "structured" ? (
+            <div className="mt-1">
+              <ReactQuill
+                theme="snow"
+                modules={quillModules}
+                value={text}
+                onChange={setText}
+                placeholder="Enter the question here..."
+                className="bg-white"
+              />
+            </div>
+          ) : (
+            <textarea
+              id="question-text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Enter the question here..."
+              className={textareaClass}
+            />
+          )}
         </div>
 
         <div className={formGroupClass}>
@@ -884,112 +1039,119 @@ export default function QuestionForm({
           </div>
         </div>
 
-        <div className={formGroupClass}>
-          <span htmlFor="correct-answer" className={labelClass}>
-            Correct Answer
-          </span>
-          <select
-            id="correct-answer"
-            value={correctOptionIndex}
-            onChange={(e) => setCorrectOptionIndex(parseInt(e.target.value))}
-            className={inputClass}
-          >
-            {nonEmptyOptions.map((optionText, index) => (
-              <option key={index} value={index}>
-                {optionText || `Option ${index + 1}`}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid gap-4">
-          <span className={labelClass}>Optional Answers</span>
-          <p className="text-sm text-gray-500">
-            Provide answer options. At least 2 required.
-          </p>
-          {optionalAnswers.map((option, index) => (
-            <div key={index} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={option}
-                onChange={(e) => handleOptionChange(index, e.target.value)}
-                placeholder={`Optional Answer ${index + 1}`}
+        {/* Only show options for multiple choice questions */}
+        {questionType === "multiple_choice" && (
+          <>
+            <div className={formGroupClass}>
+              <span htmlFor="correct-answer" className={labelClass}>
+                Correct Answer
+              </span>
+              <select
+                id="correct-answer"
+                value={correctOptionIndex}
+                onChange={(e) =>
+                  setCorrectOptionIndex(parseInt(e.target.value))
+                }
                 className={inputClass}
-              />
-              {/* Individual save buttons disabled - use main Save Question button instead */}
-              {false &&
-                question?.id &&
-                modifiedOptions.has(index) &&
-                option.trim() && (
-                  <button
-                    type="button"
-                    className={`px-3 py-1 text-xs rounded ${
-                      savingOptions.has(index)
-                        ? "bg-gray-400 text-white cursor-not-allowed"
-                        : "bg-green-600 text-white hover:bg-green-700"
-                    }`}
-                    onClick={() => handleSaveOption(index)}
-                    disabled={savingOptions.has(index)}
-                  >
-                    {savingOptions.has(index) ? "Saving..." : "Save"}
-                  </button>
-                )}
-              {(optionalAnswers.length > 2 ||
-                (question?.id && loadedOptions.length > 2)) && (
+              >
+                {nonEmptyOptions.map((optionText, index) => (
+                  <option key={index} value={index}>
+                    {optionText || `Option ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid gap-4">
+              <span className={labelClass}>Optional Answers</span>
+              <p className="text-sm text-gray-500">
+                Provide answer options. At least 2 required.
+              </p>
+              {optionalAnswers.map((option, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={option}
+                    onChange={(e) => handleOptionChange(index, e.target.value)}
+                    placeholder={`Optional Answer ${index + 1}`}
+                    className={inputClass}
+                  />
+                  {/* Individual save buttons disabled - use main Save Question button instead */}
+                  {false &&
+                    question?.id &&
+                    modifiedOptions.has(index) &&
+                    option.trim() && (
+                      <button
+                        type="button"
+                        className={`px-3 py-1 text-xs rounded ${
+                          savingOptions.has(index)
+                            ? "bg-gray-400 text-white cursor-not-allowed"
+                            : "bg-green-600 text-white hover:bg-green-700"
+                        }`}
+                        onClick={() => handleSaveOption(index)}
+                        disabled={savingOptions.has(index)}
+                      >
+                        {savingOptions.has(index) ? "Saving..." : "Save"}
+                      </button>
+                    )}
+                  {(optionalAnswers.length > 2 ||
+                    (question?.id && loadedOptions.length > 2)) && (
+                    <button
+                      type="button"
+                      className={removeButtonClass}
+                      onClick={() => handleRemoveOption(index)}
+                      title="Remove option"
+                    >
+                      <X className="h-4 w-4" />
+                      <span className="sr-only">Remove option</span>
+                    </button>
+                  )}
+                </div>
+              ))}
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className={removeButtonClass}
-                  onClick={() => handleRemoveOption(index)}
-                  title="Remove option"
+                  className={outlineButtonClass}
+                  onClick={handleAddOption}
                 >
-                  <X className="h-4 w-4" />
-                  <span className="sr-only">Remove option</span>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Another Option
                 </button>
-              )}
+              </div>
             </div>
-          ))}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className={outlineButtonClass}
-              onClick={handleAddOption}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Another Option
-            </button>
-          </div>
-        </div>
 
-        <div className={formGroupClass}>
-          <span htmlFor="options-to-present" className={labelClass}>
-            Number of Options to Display to User
-          </span>
-          <input
-            id="options-to-present"
-            type="number"
-            value={optionsToPresent}
-            onChange={(e) =>
-              setOptionsToPresent(
-                Math.max(
-                  2,
-                  Math.min(
-                    nonEmptyOptions.length || 2,
-                    Number(e.target.value) || 2
+            <div className={formGroupClass}>
+              <span htmlFor="options-to-present" className={labelClass}>
+                Number of Options to Display to User
+              </span>
+              <input
+                id="options-to-present"
+                type="number"
+                value={optionsToPresent}
+                onChange={(e) =>
+                  setOptionsToPresent(
+                    Math.max(
+                      2,
+                      Math.min(
+                        nonEmptyOptions.length || 2,
+                        Number(e.target.value) || 2
+                      )
+                    )
                   )
-                )
-              )
-            }
-            placeholder="e.g., 4"
-            min="2"
-            max={nonEmptyOptions.length || 2}
-            className={inputClass}
-          />
-          <p className="text-sm text-gray-500">
-            Must be between 2 and the number of non-empty options (
-            {nonEmptyOptions.length || 2}
-            ).
-          </p>
-        </div>
+                }
+                placeholder="e.g., 4"
+                min="2"
+                max={nonEmptyOptions.length || 2}
+                className={inputClass}
+              />
+              <p className="text-sm text-gray-500">
+                Must be between 2 and the number of non-empty options (
+                {nonEmptyOptions.length || 2}
+                ).
+              </p>
+            </div>
+          </>
+        )}
 
         <div className={buttonGroupClass}>
           <button type="button" className={ghostButtonClass} onClick={onCancel}>
@@ -1016,13 +1178,18 @@ QuestionForm.propTypes = {
     optionalAnswers: PropTypes.arrayOf(PropTypes.string),
     optionsToPresent: PropTypes.number,
     imageDataUrl: PropTypes.string,
+    questionType: PropTypes.string,
+    isMandatory: PropTypes.bool,
+    structuredTimeLimit: PropTypes.number,
   }),
   onSave: PropTypes.func.isRequired,
   onCancel: PropTypes.func.isRequired,
   assessmentId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  assessmentTimingMode: PropTypes.string,
 };
 
 QuestionForm.defaultProps = {
   question: null,
   assessmentId: null,
+  assessmentTimingMode: "none",
 };

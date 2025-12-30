@@ -37,15 +37,23 @@ export interface QuizAttemptAnswer {
   id?: number;
   questionId: number;
   questionText?: string;
-  question?: { id: number; text: string };
+  question?: {
+    id: number;
+    text: string;
+    questionType?: "multiple_choice" | "structured";
+  };
+  questionType?: "multiple_choice" | "structured"; // Question type
   selectedOptionId?: number | null;
   selectedOptionText?: string | null;
   selectedAnswer?: number | string | null;
   selectedAnswerText?: string | null;
+  structuredAnswer?: string | null; // Text answer for structured questions
   correctOptionId?: number | null;
   correctOptionText?: string | null;
   correctAnswerText?: string | null;
   isCorrect?: boolean;
+  awardedMarks?: number | null; // Marks awarded by admin for structured questions
+  maxMarks?: number | null; // Maximum marks for structured questions
 }
 
 export interface QuizAttempt {
@@ -124,6 +132,9 @@ export interface AssessmentQuestion {
   optionsToPresent: number;
   imageDataUrl: string;
   assessmentId: number;
+  questionType?: "multiple_choice" | "structured"; // New field for question type
+  isMandatory?: boolean; // New field: true = mandatory, false = optional (can be randomly selected)
+  structuredTimeLimit?: number; // Time limit in seconds for structured questions (when timingMode is "question")
   createdAt: string;
   updatedAt: string;
 }
@@ -201,6 +212,9 @@ export interface QuestionFormData {
   optionsToPresent: number;
   imageDataUrl: string;
   assessmentId: number;
+  questionType?: "multiple_choice" | "structured";
+  isMandatory?: boolean;
+  structuredTimeLimit?: number;
 }
 
 // Status constants

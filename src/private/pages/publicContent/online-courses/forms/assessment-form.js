@@ -294,6 +294,7 @@ export default function AssessmentForm({
         onSave={handleSaveQuestion}
         onCancel={handleCancelQuestionForm}
         assessmentId={assessment?.id}
+        assessmentTimingMode={timingMode}
       />
     );
   }
