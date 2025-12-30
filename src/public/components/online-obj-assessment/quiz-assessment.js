@@ -1,18 +1,30 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Sun, Moon } from 'lucide-react';
-import { useTheme } from '../../../contexts/ThemeContext';
-import { useGetAssessmentByIdQuery, useGetRandomQuestionsByAssessmentQuery, useIsEnrolledQuery, useStartQuizAttemptMutation, useRecordQuizAnswerMutation, useFinishQuizAttemptMutation, useGetUserQuizAttemptsQuery } from '../../../redux/apiSlice';
-import { getToken, getUsernameFromToken, isTokenExpired } from '../../../utils/jwtUtils';
-import useQuizLogic from '../hooks/useQuizLogic';
-import ProgressBar from './ProgressBar';
-import QuestionCard from './QuestionCard';
-import LoadingScreen from './LoadingScreen';
-import ResultsHeader from './ResultsHeader';
-import QuestionSummary from './QuestionSummary';
-import Timer from './Timer';
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { Sun, Moon } from "lucide-react";
+import { useTheme } from "../../../contexts/ThemeContext";
+import {
+  useGetAssessmentByIdQuery,
+  useGetRandomQuestionsByAssessmentQuery,
+  useIsEnrolledQuery,
+  useStartQuizAttemptMutation,
+  useRecordQuizAnswerMutation,
+  useFinishQuizAttemptMutation,
+  useGetUserQuizAttemptsQuery,
+} from "../../../redux/apiSlice";
+import {
+  getToken,
+  getUsernameFromToken,
+  isTokenExpired,
+} from "../../../utils/jwtUtils";
+import useQuizLogic from "../hooks/useQuizLogic";
+import ProgressBar from "./ProgressBar";
+import QuestionCard from "./QuestionCard";
+import LoadingScreen from "./LoadingScreen";
+import ResultsHeader from "./ResultsHeader";
+import QuestionSummary from "./QuestionSummary";
+import Timer from "./Timer";
 
 export default function QuizAssessment() {
   const { id } = useParams();
@@ -43,51 +55,71 @@ export default function QuizAssessment() {
   });
 
   // Fetch user attempts to compute attempts left
-  const { data: userAttempts = [], refetch: refetchAttempts } = useGetUserQuizAttemptsQuery(
-    username || '',
-    { skip: !username, refetchOnMountOrArgChange: true, refetchOnFocus: true, refetchOnReconnect: true }
-  );
+  const { data: userAttempts = [], refetch: refetchAttempts } =
+    useGetUserQuizAttemptsQuery(username || "", {
+      skip: !username,
+      refetchOnMountOrArgChange: true,
+      refetchOnFocus: true,
+      refetchOnReconnect: true,
+    });
 
   // Always recheck attempts when intro is visible or tab/window gains focus
   useEffect(() => {
     if (showIntroduction && username) {
-      try { refetchAttempts(); } catch (_) { /* noop */ }
+      try {
+        refetchAttempts();
+      } catch (_) {
+        /* noop */
+      }
     }
   }, [showIntroduction, username, assessmentId, refetchAttempts]);
 
   useEffect(() => {
     const onFocus = () => {
       if (username) {
-        try { refetchAttempts(); } catch (_) { /* noop */ }
+        try {
+          refetchAttempts();
+        } catch (_) {
+          /* noop */
+        }
       }
     };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
     return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
     };
   }, [username, refetchAttempts]);
 
   // Check enrollment if assessment belongs to a course
   const { data: enrollmentData } = useIsEnrolledQuery(
-    { courseId: assessment?.courseId, participantId: username || '' },
+    { courseId: assessment?.courseId, participantId: username || "" },
     { skip: !assessment?.courseId || !username || !isAuthenticated }
   );
 
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!assessmentLoading && !isAuthenticated) {
-      navigate('/login', { state: { warning: 'Please login to access assessments' } });
+      navigate("/login", {
+        state: { warning: "Please login to access assessments" },
+      });
     }
   }, [assessmentLoading, isAuthenticated, navigate]);
 
   // Redirect to course page if assessment belongs to a course and user is not enrolled
   useEffect(() => {
-    if (assessment && assessment.courseId && isAuthenticated && enrollmentData !== undefined) {
+    if (
+      assessment &&
+      assessment.courseId &&
+      isAuthenticated &&
+      enrollmentData !== undefined
+    ) {
       if (!enrollmentData?.enrolled) {
-        navigate(`/course/${assessment.courseId}`, { 
-          state: { warning: 'Please enroll in the course to access this assessment' } 
+        navigate(`/course/${assessment.courseId}`, {
+          state: {
+            warning: "Please enroll in the course to access this assessment",
+          },
         });
       }
     }
@@ -124,6 +156,27 @@ export default function QuizAssessment() {
     const shuffledQuestions = shuffle([...questions]);
 
     return shuffledQuestions.map((question) => {
+      // Detect question type: check questionType field first, then fallback to checking if options exist
+      const hasOptions =
+        Array.isArray(question.options) && question.options.length > 0;
+      const questionType =
+        question.questionType ||
+        (hasOptions ? "multiple_choice" : "structured");
+
+      // For structured questions, return simpler format
+      if (questionType === "structured") {
+        return {
+          id: question.id,
+          question: question.text,
+          options: [], // No options for structured questions
+          correctAnswer: null, // No correct answer for structured (needs manual grading)
+          imageDataUrl: question.imageDataUrl || "",
+          questionType: "structured",
+          structuredTimeLimit: question.structuredTimeLimit,
+        };
+      }
+
+      // For multiple choice questions, process options as before
       const allOptions = Array.isArray(question.options)
         ? [...question.options]
         : [];
@@ -172,6 +225,8 @@ export default function QuizAssessment() {
         options: finalOptions,
         correctAnswer: correctIndex >= 0 ? correctIndex : 0,
         imageDataUrl: question.imageDataUrl || "",
+        questionType: "multiple_choice",
+        structuredTimeLimit: undefined,
       };
     });
   }, [questions]); // Only recalculate when questions change
@@ -216,12 +271,17 @@ export default function QuizAssessment() {
     (async () => {
       try {
         for (const ans of results.answers || []) {
+          // Find the question to determine its type
+          const question = quizData.find((q) => q.id === ans.questionId);
+          const isStructured = question?.questionType === "structured";
+
           await recordAnswer({
             attemptId,
             questionId: ans.questionId,
-            answerId: null,
+            answerId: isStructured ? null : ans.selectedAnswer,
             participantId: username,
             correct: !!ans.isCorrect,
+            structuredAnswer: isStructured ? ans.selectedAnswer : null,
           }).unwrap();
         }
         await finishAttempt({ attemptId }).unwrap();
@@ -231,7 +291,7 @@ export default function QuizAssessment() {
           : 0;
         const maxRetries = assessment?.maxRetries || 0;
         if (maxRetries > 0 && attemptsForThis + 1 >= maxRetries) {
-          navigate('/dashboard');
+          navigate("/dashboard");
         }
       } catch (err) {
         // ignore persistence errors; UI already shows results
@@ -243,8 +303,8 @@ export default function QuizAssessment() {
   const resetQuiz = () => {
     resetQuizLogic();
     setShowIntroduction(true);
-  setAttemptId(null);
-  persistedRef.current = false;
+    setAttemptId(null);
+    persistedRef.current = false;
   };
 
   // Start quiz timer when user clicks "Start Quiz"
@@ -255,19 +315,22 @@ export default function QuizAssessment() {
       : 0;
     const maxRetries = assessment?.maxRetries || 0;
     if (maxRetries > 0 && attemptsForThis >= maxRetries) {
-      window.alert('Maximum attempts reached');
+      window.alert("Maximum attempts reached");
       return;
     }
     try {
       if (username && assessmentId) {
-        const resp = await startAttempt({ quizId: assessmentId, participantId: username }).unwrap();
+        const resp = await startAttempt({
+          quizId: assessmentId,
+          participantId: username,
+        }).unwrap();
         setAttemptId(resp.attemptId);
       }
     } catch (e) {
       const status = e?.status || 0;
-      const msg = e?.data?.message || 'Unable to start attempt';
+      const msg = e?.data?.message || "Unable to start attempt";
       if (status === 403) {
-        window.alert(msg || 'Maximum attempts reached');
+        window.alert(msg || "Maximum attempts reached");
         return; // Block starting the quiz
       }
       // Other errors: allow quiz UI but won’t persist
@@ -300,7 +363,9 @@ export default function QuizAssessment() {
           </button>
         </div>
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Assessment Not Found</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+            Assessment Not Found
+          </h2>
           <p className="text-gray-600 dark:text-gray-300 mb-4">
             The requested assessment could not be found or has no questions.
           </p>
@@ -320,9 +385,10 @@ export default function QuizAssessment() {
     const attemptsForThis = Array.isArray(userAttempts)
       ? userAttempts.filter((a) => a?.quiz?.id === assessmentId).length
       : 0;
-    const attemptsLeft = assessment?.maxRetries > 0
-      ? Math.max((assessment?.maxRetries || 0) - attemptsForThis, 0)
-      : null;
+    const attemptsLeft =
+      assessment?.maxRetries > 0
+        ? Math.max((assessment?.maxRetries || 0) - attemptsForThis, 0)
+        : null;
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900 pt-16">
         {/* Theme Toggle */}
@@ -342,27 +408,51 @@ export default function QuizAssessment() {
         <div className="max-w-4xl mx-auto p-6">
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-8">
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">{assessment.name}</h1>
-              <p className="text-lg text-gray-600 dark:text-gray-300">{assessment.description}</p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                {assessment.name}
+              </h1>
+              <p className="text-lg text-gray-600 dark:text-gray-300">
+                {assessment.description}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               {/* Quiz Information */}
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-4">Quiz Information</h3>
+                <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-4">
+                  Quiz Information
+                </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-300">Questions to Attempt:</span>
-                    <span className="font-medium dark:text-white">{assessment.questionsToPresent}</span>
+                    <span className="text-gray-600 dark:text-gray-300">
+                      Questions to Attempt:
+                    </span>
+                    <span className="font-medium dark:text-white">
+                      {assessment.questionsToPresent}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-300">Maximum Retries:</span>
-                    <span className="font-medium dark:text-white">{assessment.maxRetries}</span>
+                    <span className="text-gray-600 dark:text-gray-300">
+                      Maximum Retries:
+                    </span>
+                    <span className="font-medium dark:text-white">
+                      {assessment.maxRetries}
+                    </span>
                   </div>
                   {attemptsLeft !== null && (
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-300">Attempts Left:</span>
-                      <span className={`font-medium ${attemptsLeft === 0 ? 'text-red-400' : 'dark:text-white'}`}>{attemptsLeft}</span>
+                      <span className="text-gray-600 dark:text-gray-300">
+                        Attempts Left:
+                      </span>
+                      <span
+                        className={`font-medium ${
+                          attemptsLeft === 0
+                            ? "text-red-400"
+                            : "dark:text-white"
+                        }`}
+                      >
+                        {attemptsLeft}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -370,30 +460,49 @@ export default function QuizAssessment() {
 
               {/* Timing Information */}
               <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-green-900 dark:text-green-300 mb-4">Timing</h3>
+                <h3 className="text-lg font-semibold text-green-900 dark:text-green-300 mb-4">
+                  Timing
+                </h3>
                 <div className="space-y-3">
                   {assessment.timingMode === "none" && (
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-300">Time Limit:</span>
-                      <span className="font-medium text-green-600 dark:text-green-400">No Time Limit</span>
+                      <span className="text-gray-600 dark:text-gray-300">
+                        Time Limit:
+                      </span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        No Time Limit
+                      </span>
                     </div>
                   )}
                   {assessment.timingMode === "quiz" && (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-300">Time Limit:</span>
-                        <span className="font-medium text-orange-600 dark:text-orange-400">{assessment.timeLimit} minutes</span>
+                        <span className="text-gray-600 dark:text-gray-300">
+                          Time Limit:
+                        </span>
+                        <span className="font-medium text-orange-600 dark:text-orange-400">
+                          {assessment.timeLimit} minutes
+                        </span>
                       </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Entire quiz must be completed within this time</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Entire quiz must be completed within this time
+                      </p>
                     </>
                   )}
                   {assessment.timingMode === "question" && (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-300">Time per Question:</span>
-                        <span className="font-medium text-red-600 dark:text-red-400">{assessment.timeLimit} seconds</span>
+                        <span className="text-gray-600 dark:text-gray-300">
+                          Time per Question:
+                        </span>
+                        <span className="font-medium text-red-600 dark:text-red-400">
+                          {assessment.timeLimit} seconds
+                        </span>
                       </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Each question has a time limit</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Each question has a time limit. Structured questions may
+                        have individual time limits set by the admin.
+                      </p>
                     </>
                   )}
                 </div>
@@ -402,12 +511,21 @@ export default function QuizAssessment() {
 
             {/* Instructions */}
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-600 p-6 mb-8">
-              <h3 className="text-lg font-semibold text-yellow-900 dark:text-yellow-300 mb-3">Instructions</h3>
+              <h3 className="text-lg font-semibold text-yellow-900 dark:text-yellow-300 mb-3">
+                Instructions
+              </h3>
               <ul className="text-gray-700 dark:text-gray-300 space-y-2">
-                <li>• Read each question carefully before selecting your answer</li>
-                <li>• You can change your answer before clicking "Next Question"</li>
-                {assessment.timingMode !== 'question' && (
-                  <li>• You can navigate back to previous questions using the "Previous" button</li>
+                <li>
+                  • Read each question carefully before selecting your answer
+                </li>
+                <li>
+                  • You can change your answer before clicking "Next Question"
+                </li>
+                {assessment.timingMode !== "question" && (
+                  <li>
+                    • You can navigate back to previous questions using the
+                    "Previous" button
+                  </li>
                 )}
                 {assessment.timingMode === "quiz" && (
                   <li>
@@ -442,10 +560,20 @@ export default function QuizAssessment() {
               <button
                 onClick={handleStartQuiz}
                 disabled={assessment?.maxRetries > 0 && attemptsLeft === 0}
-                className={`px-8 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors font-medium ${assessment?.maxRetries > 0 && attemptsLeft === 0 ? 'bg-gray-400 text-gray-100 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'}`}
-                title={assessment?.maxRetries > 0 && attemptsLeft === 0 ? 'Attempts exhausted' : 'Start Quiz'}
+                className={`px-8 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors font-medium ${
+                  assessment?.maxRetries > 0 && attemptsLeft === 0
+                    ? "bg-gray-400 text-gray-100 cursor-not-allowed"
+                    : "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500"
+                }`}
+                title={
+                  assessment?.maxRetries > 0 && attemptsLeft === 0
+                    ? "Attempts exhausted"
+                    : "Start Quiz"
+                }
               >
-                {assessment?.maxRetries > 0 && attemptsLeft === 0 ? 'Attempts Exhausted' : 'Start Quiz'}
+                {assessment?.maxRetries > 0 && attemptsLeft === 0
+                  ? "Attempts Exhausted"
+                  : "Start Quiz"}
               </button>
             </div>
           </div>
@@ -497,11 +625,11 @@ export default function QuizAssessment() {
           <ResultsHeader results={results} />
           {/* Only show QuestionSummary if showAnswers is enabled */}
           {assessment.showAnswers && (
-          <QuestionSummary
-            quizData={quizData}
-            results={results}
-            onResetQuiz={resetQuiz}
-          />
+            <QuestionSummary
+              quizData={quizData}
+              results={results}
+              onResetQuiz={resetQuiz}
+            />
           )}
           {/* Show retry option if maxRetries allows it */}
           {assessment.maxRetries > 1 && (
@@ -573,16 +701,22 @@ export default function QuizAssessment() {
       <div className="w-full bg-gray-50 dark:bg-slate-900 pt-4 mt-20">
         <div className="max-w-2xl mx-auto px-4">
           <div className="flex items-center justify-between mb-2">
-          <ProgressBar
-            currentQuestion={currentQuestion}
-            totalQuestions={totalQuestions}
-          />
+            <ProgressBar
+              currentQuestion={currentQuestion}
+              totalQuestions={totalQuestions}
+            />
             <Timer
               timeRemaining={timeRemaining}
               timingMode={timingMode}
               formatTime={formatTime}
               isTimeUp={isTimeUp}
-              totalTime={totalTime}
+              totalTime={
+                // For per-question mode, use the current question's time limit if available
+                timingMode === "question" &&
+                quizData[currentQuestion]?.structuredTimeLimit
+                  ? quizData[currentQuestion].structuredTimeLimit
+                  : totalTime
+              }
             />
           </div>
         </div>
@@ -599,10 +733,15 @@ export default function QuizAssessment() {
             onPrevious={handlePrevious}
             showPrevious={timingMode !== "question" && currentQuestion > 0}
             isLastQuestion={currentQuestion === totalQuestions - 1}
+            questionType={
+              quizData[currentQuestion]?.questionType ||
+              (quizData[currentQuestion]?.options?.length > 0
+                ? "multiple_choice"
+                : "structured")
+            }
           />
         </div>
       </div>
     </div>
   );
 }
-

@@ -65,9 +65,28 @@ export const apiSlice = createApi({
         answerId: number | null;
         participantId: string;
         correct: boolean;
+        structuredAnswer?: string | null; // For structured questions
       }
     >({
       query: (body) => ({ url: "/quiz-attempts/answer", method: "POST", body }),
+    }),
+    awardMarksForStructuredQuestion: builder.mutation<
+      void,
+      {
+        attemptId: number;
+        questionId: number;
+        awardedMarks: number;
+        maxMarks: number;
+      }
+    >({
+      query: (body) => ({
+        url: "/quiz-attempts/award-marks",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (result, error, { attemptId }) => [
+        { type: "AssessmentResult", attemptId },
+      ],
     }),
     finishQuizAttempt: builder.mutation<
       {
@@ -88,13 +107,16 @@ export const apiSlice = createApi({
         { type: "AssessmentResult", participantId },
       ],
     }),
-    getQuizAttemptsByAssessment: builder.query<{
-      totalAttempts: number;
-      uniqueParticipants: number;
-      averageScore: number;
-      passRate: number;
-      attempts: QuizAttempt[];
-    }, number>({
+    getQuizAttemptsByAssessment: builder.query<
+      {
+        totalAttempts: number;
+        uniqueParticipants: number;
+        averageScore: number;
+        passRate: number;
+        attempts: QuizAttempt[];
+      },
+      number
+    >({
       query: (assessmentId) => `/quiz-attempts/assessment/${assessmentId}`,
       providesTags: (result, error, assessmentId) => [
         { type: "AssessmentResult", assessmentId },
@@ -594,6 +616,7 @@ export const {
   useStartQuizAttemptMutation,
   useRecordQuizAnswerMutation,
   useFinishQuizAttemptMutation,
+  useAwardMarksForStructuredQuestionMutation,
   useGetUserQuizAttemptsQuery,
   useGetQuizAttemptsByAssessmentQuery,
   useGetQuizAttemptByIdQuery,
