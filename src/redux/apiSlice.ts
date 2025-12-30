@@ -261,8 +261,11 @@ export const apiSlice = createApi({
         { type: "CourseAssessment", courseId },
       ],
     }),
-    getStandaloneAssessments: builder.query<CourseAssessment[], void>({
-      query: () => "/assessments/standalone",
+    getStandaloneAssessments: builder.query<CourseAssessment[], string | undefined>({
+      query: (category) => {
+        const params = category ? `?category=${encodeURIComponent(category)}` : '';
+        return `/assessments/standalone${params}`;
+      },
       providesTags: ["CourseAssessment"],
     }),
     getAssessmentById: builder.query<CourseAssessment, number>({

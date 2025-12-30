@@ -57,7 +57,10 @@ export default function AssessmentsTab({
     data: standaloneAssessments,
     isLoading: standaloneAssessmentsLoading,
     isError: standaloneAssessmentsError,
-  } = useGetStandaloneAssessmentsQuery(undefined, { skip: !!courseId });
+  } = useGetStandaloneAssessmentsQuery(
+    standaloneCategory || filterCategory || undefined, 
+    { skip: !!courseId }
+  );
 
   const [createAssessment] = useCreateAssessmentMutation();
   const [updateAssessment] = useUpdateAssessmentMutation();
@@ -67,7 +70,7 @@ export default function AssessmentsTab({
   const apiAssessments = useMemo(() => {
     if (courseId)
       return Array.isArray(courseAssessments) ? courseAssessments : [];
-    // Backend does not support categories on assessments yet; show all standalone
+    // Filter by category if provided
     return Array.isArray(standaloneAssessments) ? standaloneAssessments : [];
   }, [courseId, courseAssessments, standaloneAssessments]);
 
