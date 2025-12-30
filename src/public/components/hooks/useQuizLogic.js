@@ -28,7 +28,8 @@ export default function useQuizLogic(quizData, timingSettings = null) {
         const quizTimeInSeconds = timingSettings.timeLimit * 60;
         setTotalTime(quizTimeInSeconds);
       } else if (timingSettings.timingMode === "question") {
-        // Set timer for current question (in seconds)
+        // Set default timer for questions (in seconds)
+        // Individual questions may override this with structuredTimeLimit
         setTotalTime(timingSettings.timeLimit);
       }
     } else {
@@ -101,8 +102,12 @@ export default function useQuizLogic(quizData, timingSettings = null) {
     // Reset isTimeUp flag when moving to new question
     setIsTimeUp(false);
 
+    // Get time limit for current question (use structuredTimeLimit if available, otherwise use default)
+    const currentQ = quizData[currentQuestion];
+    const questionTimeLimit = currentQ?.structuredTimeLimit || totalTime;
+
     // Set timeRemaining for current question
-    setTimeRemaining(totalTime);
+    setTimeRemaining(questionTimeLimit);
 
     // Start new timer for current question
     timerRef.current = setInterval(() => {
@@ -122,7 +127,13 @@ export default function useQuizLogic(quizData, timingSettings = null) {
         timerRef.current = null;
       }
     };
-  }, [quizStarted, timingSettings?.timingMode, totalTime, currentQuestion]);
+  }, [
+    quizStarted,
+    timingSettings?.timingMode,
+    totalTime,
+    currentQuestion,
+    quizData,
+  ]);
 
   // Handle time up
   useEffect(() => {
@@ -146,8 +157,9 @@ export default function useQuizLogic(quizData, timingSettings = null) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTimeUp, timingSettings?.timingMode, currentQuestion, totalQuestions]);
 
-  const handleAnswerSelect = (answerIndex) => {
-    setSelectedAnswer(answerIndex);
+  const handleAnswerSelect = (answer) => {
+    // Handle both multiple choice (number) and structured (string) answers
+    setSelectedAnswer(answer);
   };
 
   const submitQuiz = async () => {
@@ -165,18 +177,24 @@ export default function useQuizLogic(quizData, timingSettings = null) {
 
     // Create detailed user selections for better readability
     const detailedUserSelections = quizData.map((question) => {
-      const userAnswerIndex = finalAnswers[question.id];
+      const userAnswer = finalAnswers[question.id];
+      const isStructured = question.questionType === "structured";
+
       return {
         questionId: question.id,
         question: question.question,
-        selectedAnswerIndex: userAnswerIndex,
-        selectedAnswerText:
-          typeof userAnswerIndex === "number"
-            ? question.options[userAnswerIndex]
-            : null,
+        questionType: question.questionType || "multiple_choice",
+        selectedAnswerIndex: typeof userAnswer === "number" ? userAnswer : null,
+        selectedAnswerText: isStructured
+          ? typeof userAnswer === "string"
+            ? userAnswer
+            : null
+          : typeof userAnswer === "number"
+          ? question.options[userAnswer]
+          : null,
         correctAnswerIndex: question.correctAnswer,
-        correctAnswerText: question.options[question.correctAnswer],
-        isCorrect: userAnswerIndex === question.correctAnswer,
+        correctAnswerText: question.options?.[question.correctAnswer] || null,
+        isCorrect: isStructured ? false : userAnswer === question.correctAnswer, // Structured questions need manual grading
       };
     });
 
@@ -222,10 +240,15 @@ export default function useQuizLogic(quizData, timingSettings = null) {
     // Calculate results
     const answersArray = quizData.map((question) => {
       const userAnswer = finalAnswers[question.id];
+      const isStructured = question.questionType === "structured";
+
       return {
         questionId: question.id,
         selectedAnswer: userAnswer,
-        isCorrect: userAnswer === question.correctAnswer,
+        // For structured questions, include structuredAnswer field
+        structuredAnswer:
+          isStructured && typeof userAnswer === "string" ? userAnswer : null,
+        isCorrect: isStructured ? false : userAnswer === question.correctAnswer, // Structured questions need manual grading
       };
     });
 
@@ -257,27 +280,46 @@ export default function useQuizLogic(quizData, timingSettings = null) {
   };
 
   const handleNext = (forceAdvance = false) => {
-    // Allow advance on timeout even if no answer selected
-    const hasAnswer = selectedAnswer !== null && selectedAnswer !== undefined;
+    const currentQ = quizData[currentQuestion];
+    const isStructured = currentQ?.questionType === "structured";
+
+    // For structured questions, check if answer is not empty
+    // For multiple choice, check if answer is not null
+    const hasAnswer = isStructured
+      ? selectedAnswer &&
+        typeof selectedAnswer === "string" &&
+        selectedAnswer.trim() !== "" &&
+        selectedAnswer !== "<p><br></p>"
+      : selectedAnswer !== null && selectedAnswer !== undefined;
+
     if (hasAnswer || forceAdvance) {
       const updatedAnswers = {
         ...userAnswers,
-        [quizData[currentQuestion].id]: hasAnswer ? selectedAnswer : null,
+        [currentQ.id]: hasAnswer ? selectedAnswer : null,
       };
 
       setUserAnswers(updatedAnswers);
 
       console.log(`=== ANSWER STORED FOR QUESTION ${currentQuestion + 1} ===`);
-      console.log(`Question ID: ${quizData[currentQuestion].id}`);
+      console.log(`Question ID: ${currentQ.id}`);
       console.log(
-        `Selected Answer Index: ${
-          hasAnswer ? selectedAnswer : "none (timeout)"
-        }`
+        `Question Type: ${currentQ.questionType || "multiple_choice"}`
       );
-      if (hasAnswer) {
+      if (isStructured) {
         console.log(
-          `Selected Answer Text: "${quizData[currentQuestion].options[selectedAnswer]}"`
+          `Structured Answer: ${hasAnswer ? "provided" : "none (timeout)"}`
         );
+      } else {
+        console.log(
+          `Selected Answer Index: ${
+            hasAnswer ? selectedAnswer : "none (timeout)"
+          }`
+        );
+        if (hasAnswer) {
+          console.log(
+            `Selected Answer Text: "${currentQ.options[selectedAnswer]}"`
+          );
+        }
       }
       console.log("Current user answers object:", updatedAnswers);
       console.log("---");

@@ -1,6 +1,6 @@
 "use client";
 
-import type React from "react";
+import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Plane,
@@ -54,20 +54,117 @@ const UserDashboard: React.FC = () => {
   // We don't use a user-wide enrolled courses endpoint; enrollment is checked per course
 
   // Skip user-wide progress endpoint (not implemented on backend). We'll use per-course progress instead.
-  const { isLoading: progressLoading } = useGetUserProgressQuery(username || "", { skip: true });
+  const { isLoading: progressLoading } = useGetUserProgressQuery(
+    username || "",
+    { skip: true }
+  );
 
   // We no longer build a userProgress list from a user-wide endpoint.
 
   // Enrollment is checked per-course; no precomputed enrolled course ids
 
-  // Completed count will be derived by the per-course cards; for the top stat, show ... while enrolled loading
-  const completedCourses: any[] = [];
+  // Component to count completed courses by checking each course individually
+  const CompletedCoursesCount: React.FC<{
+    courses: any[];
+    participantId: string;
+  }> = ({ courses, participantId }) => {
+    // Component to check a single course's completion status
+    const CourseCompletionChecker: React.FC<{
+      course: any;
+      onComplete: (isCompleted: boolean) => void;
+    }> = ({ course, onComplete }) => {
+      const { data: isEnrolledResp } = useIsEnrolledQuery(
+        { courseId: course.id, participantId },
+        { skip: !course?.id || !participantId }
+      );
+      const { data: progressData, isLoading } = useGetCourseProgressQuery(
+        { courseId: course.id, participantId },
+        { skip: !course?.id || !participantId }
+      );
+
+      React.useEffect(() => {
+        if (!isLoading && isEnrolledResp?.enrolled) {
+          const completed = Number(progressData?.completed || 0);
+          const total = Number(progressData?.total || 0);
+          const percent = Math.round(
+            Number(
+              progressData?.percent ||
+                (total > 0 ? (completed / total) * 100 : 0)
+            )
+          );
+          const isCompleted = total > 0 ? completed >= total : percent >= 100;
+          onComplete(isCompleted);
+        } else if (!isLoading) {
+          onComplete(false);
+        }
+      }, [isLoading, isEnrolledResp, progressData, onComplete]);
+
+      return null; // This component doesn't render anything
+    };
+
+    const [completionStatus, setCompletionStatus] = React.useState<
+      Record<number, boolean>
+    >({});
+    const [isLoading, setIsLoading] = React.useState(true);
+
+    const handleCourseComplete = React.useCallback(
+      (courseId: number, isCompleted: boolean) => {
+        setCompletionStatus((prev) => {
+          const newStatus = { ...prev, [courseId]: isCompleted };
+          return newStatus;
+        });
+      },
+      []
+    );
+
+    React.useEffect(() => {
+      // Check if all courses have been checked
+      const allChecked =
+        courses.length > 0 &&
+        courses.every((c) => completionStatus[c.id] !== undefined);
+      if (allChecked) {
+        setIsLoading(false);
+      }
+    }, [completionStatus, courses]);
+
+    React.useEffect(() => {
+      // Reset when courses or participantId changes
+      setCompletionStatus({});
+      setIsLoading(true);
+    }, [courses, participantId]);
+
+    const completedCount =
+      Object.values(completionStatus).filter(Boolean).length;
+    const allChecked =
+      courses.length === 0 ||
+      Object.keys(completionStatus).length === courses.length;
+
+    return (
+      <>
+        {courses.map((course) => (
+          <CourseCompletionChecker
+            key={course.id}
+            course={course}
+            onComplete={(isCompleted) =>
+              handleCourseComplete(course.id, isCompleted)
+            }
+          />
+        ))}
+        {isLoading || !allChecked ? "..." : completedCount}
+      </>
+    );
+  };
+
+  const completedCourses: any[] = []; // Keep for backward compatibility
 
   // Use attempts from DB (replaces deprecated assessment-results endpoint)
-  const { data: myAttempts = [], isLoading: resultsLoading } = useGetUserQuizAttemptsQuery(
-    username || "",
-    { skip: !username, refetchOnMountOrArgChange: true, refetchOnFocus: true, refetchOnReconnect: true }
-  );
+  const { data: myAttempts = [], isLoading: resultsLoading } =
+    useGetUserQuizAttemptsQuery(username || "", {
+      skip: !username,
+      refetchOnMountOrArgChange: true,
+      refetchOnFocus: true,
+      refetchOnReconnect: true,
+    });
 
   // Get available standalone assessments
   const { data: standaloneAssessments = [], isLoading: assessmentsLoading } =
@@ -105,7 +202,10 @@ const UserDashboard: React.FC = () => {
   };
 
   const HasAssessmentBadge: React.FC<{ courseId: number }> = ({ courseId }) => {
-    const { data: assessments = [] } = useGetAssessmentsByCourseQuery(courseId, { skip: !courseId });
+    const { data: assessments = [] } = useGetAssessmentsByCourseQuery(
+      courseId,
+      { skip: !courseId }
+    );
     if (!assessments || assessments.length === 0) return null;
     return (
       <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
@@ -115,17 +215,27 @@ const UserDashboard: React.FC = () => {
   };
 
   // Card for Available Courses that hides itself if the user is enrolled or already has progress
-  const AvailableCourseCard: React.FC<{ course: any; participantId: string; isHiddenByProgress?: boolean }> = ({ course, participantId }) => {
-    const { data: isEnrolledResp } = useIsEnrolledQuery({ courseId: course.id, participantId }, { skip: !course?.id || !participantId });
+  const AvailableCourseCard: React.FC<{
+    course: any;
+    participantId: string;
+    isHiddenByProgress?: boolean;
+  }> = ({ course, participantId }) => {
+    const { data: isEnrolledResp } = useIsEnrolledQuery(
+      { courseId: course.id, participantId },
+      { skip: !course?.id || !participantId }
+    );
     const isEnrolled = !!isEnrolledResp?.enrolled;
-    const { data: progressData } = useGetCourseProgressQuery({ courseId: course.id, participantId }, { skip: !course?.id || !participantId });
-    const hasProgress = Number(progressData?.completed || 0) > 0 || Number(progressData?.percent || 0) > 0;
+    const { data: progressData } = useGetCourseProgressQuery(
+      { courseId: course.id, participantId },
+      { skip: !course?.id || !participantId }
+    );
+    const hasProgress =
+      Number(progressData?.completed || 0) > 0 ||
+      Number(progressData?.percent || 0) > 0;
     if (isEnrolled || hasProgress) return null;
 
     return (
-      <div
-        className="group bg-white dark:bg-slate-800/50 rounded-xl shadow-lg hover:shadow-2xl hover:shadow-sky-500/20 dark:hover:shadow-sky-500/20 transition-all duration-300 overflow-hidden border border-sky-200 dark:border-sky-500/20 hover:border-sky-400 dark:hover:border-sky-500/50"
-      >
+      <div className="group bg-white dark:bg-slate-800/50 rounded-xl shadow-lg hover:shadow-2xl hover:shadow-sky-500/20 dark:hover:shadow-sky-500/20 transition-all duration-300 overflow-hidden border border-sky-200 dark:border-sky-500/20 hover:border-sky-400 dark:hover:border-sky-500/50">
         <div className="h-2 bg-gradient-to-r from-sky-500 to-blue-500 group-hover:h-3 transition-all"></div>
         <div className="p-6">
           <div className="flex items-start justify-between gap-3 mb-4">
@@ -140,9 +250,7 @@ const UserDashboard: React.FC = () => {
             {course.startDate && (
               <span>Starts: {formatDate(course.startDate)}</span>
             )}
-            {course.endDate && (
-              <span>Ends: {formatDate(course.endDate)}</span>
-            )}
+            {course.endDate && <span>Ends: {formatDate(course.endDate)}</span>}
             <div className="flex items-center gap-2">
               <HasAssessmentBadge courseId={course.id} />
             </div>
@@ -167,12 +275,26 @@ const UserDashboard: React.FC = () => {
   }
 
   // Child card that uses the SAME per-course progress endpoint as course page
-  const CourseProgressCard: React.FC<{ course: any; participantId: string; section: "inProgress" | "completed" }> = ({ course, participantId, section }) => {
-    const { data: isEnrolledResp } = useIsEnrolledQuery({ courseId: course.id, participantId }, { skip: !course?.id || !participantId });
-    const { data: progressData, isLoading } = useGetCourseProgressQuery({ courseId: course.id, participantId }, { skip: !course?.id || !participantId });
+  const CourseProgressCard: React.FC<{
+    course: any;
+    participantId: string;
+    section: "inProgress" | "completed";
+  }> = ({ course, participantId, section }) => {
+    const { data: isEnrolledResp } = useIsEnrolledQuery(
+      { courseId: course.id, participantId },
+      { skip: !course?.id || !participantId }
+    );
+    const { data: progressData, isLoading } = useGetCourseProgressQuery(
+      { courseId: course.id, participantId },
+      { skip: !course?.id || !participantId }
+    );
     const completed = Number(progressData?.completed || 0);
     const total = Number(progressData?.total || 0);
-    const percent = Math.round(Number(progressData?.percent || (total > 0 ? (completed / total) * 100 : 0)));
+    const percent = Math.round(
+      Number(
+        progressData?.percent || (total > 0 ? (completed / total) * 100 : 0)
+      )
+    );
     const isCompleted = total > 0 ? completed >= total : percent >= 100;
     const isEnrolled = !!isEnrolledResp?.enrolled;
 
@@ -191,9 +313,17 @@ const UserDashboard: React.FC = () => {
     if (section === "completed" && !isCompleted) return null;
 
     return (
-      <div className={`bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-lg border ${isCompleted ? "border-emerald-200 dark:border-emerald-500/20" : "border-amber-200 dark:border-amber-500/20"}`}>
+      <div
+        className={`bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-lg border ${
+          isCompleted
+            ? "border-emerald-200 dark:border-emerald-500/20"
+            : "border-amber-200 dark:border-amber-500/20"
+        }`}
+      >
         <div className="flex items-start justify-between mb-4">
-          <h4 className="text-lg font-semibold text-slate-800 dark:text-white">{course.name}</h4>
+          <h4 className="text-lg font-semibold text-slate-800 dark:text-white">
+            {course.name}
+          </h4>
         </div>
         <div className="mb-4">
           <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
@@ -209,14 +339,32 @@ const UserDashboard: React.FC = () => {
             <span>{`${Math.max(percent, 0)}%`}</span>
           </div>
           <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-            <div className={`${isCompleted ? "bg-emerald-500 dark:bg-emerald-400" : "bg-amber-500 dark:bg-amber-400"} h-2 rounded-full transition-all duration-300`} style={{ width: `${Math.max(percent, 0)}%` }} />
+            <div
+              className={`${
+                isCompleted
+                  ? "bg-emerald-500 dark:bg-emerald-400"
+                  : "bg-amber-500 dark:bg-amber-400"
+              } h-2 rounded-full transition-all duration-300`}
+              style={{ width: `${Math.max(percent, 0)}%` }}
+            />
           </div>
         </div>
         <div className="flex justify-between items-center">
           {course.endDate ? (
-            <span className="text-xs text-slate-500 dark:text-slate-500">Ends: {formatDate(course.endDate)}</span>
-          ) : <span />}
-          <Link to={`/course/${course.id}`} className={`inline-flex items-center ${isCompleted ? "text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300" : "text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"} font-semibold text-sm transition-colors`}>
+            <span className="text-xs text-slate-500 dark:text-slate-500">
+              Ends: {formatDate(course.endDate)}
+            </span>
+          ) : (
+            <span />
+          )}
+          <Link
+            to={`/course/${course.id}`}
+            className={`inline-flex items-center ${
+              isCompleted
+                ? "text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+                : "text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
+            } font-semibold text-sm transition-colors`}
+          >
             {isCompleted ? "Review Course" : "Continue"}
             <ArrowRight className="ml-1 h-3 w-3" />
           </Link>
@@ -309,7 +457,10 @@ const UserDashboard: React.FC = () => {
                   Completed Courses
                 </p>
                 <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {progressLoading ? "..." : completedCourses.length}
+                  <CompletedCoursesCount
+                    courses={departmentCourses}
+                    participantId={username || ""}
+                  />
                 </p>
               </div>
               <CheckCircle className="h-10 w-10 text-emerald-500 dark:text-emerald-400 opacity-50" />
@@ -325,10 +476,14 @@ const UserDashboard: React.FC = () => {
                   {resultsLoading
                     ? "..."
                     : (() => {
-                      if (!myAttempts || myAttempts.length === 0) return 0;
-                      const unique = new Set((myAttempts as any[]).map((a: any) => a?.quiz?.id || `quiz-${a.id}`));
-                      return unique.size;
-                    })()}
+                        if (!myAttempts || myAttempts.length === 0) return 0;
+                        const unique = new Set(
+                          (myAttempts as any[]).map(
+                            (a: any) => a?.quiz?.id || `quiz-${a.id}`
+                          )
+                        );
+                        return unique.size;
+                      })()}
                 </p>
               </div>
               <FileText className="h-10 w-10 text-purple-500 dark:text-purple-400 opacity-50" />
@@ -344,17 +499,26 @@ const UserDashboard: React.FC = () => {
                   {resultsLoading
                     ? "..."
                     : (() => {
-                      if (!myAttempts || myAttempts.length === 0) return 0;
-                      const grouped: Record<string, number[]> = (myAttempts as any[]).reduce((acc: any, a: any) => {
-                        const key = a.quiz?.id || `quiz-${a.id}`;
-                        const pct = a.totalQuestions ? (a.score * 100) / a.totalQuestions : 0;
-                        if (!acc[key]) acc[key] = [pct]; else acc[key].push(pct);
-                        return acc;
-                      }, {});
-                      const bestPercents = Object.values(grouped).map((arr: number[]) => Math.round(Math.max(...arr)));
-                      const avg = bestPercents.reduce((s, v) => s + v, 0) / bestPercents.length;
-                      return Math.round(avg);
-                    })()}
+                        if (!myAttempts || myAttempts.length === 0) return 0;
+                        const grouped: Record<string, number[]> = (
+                          myAttempts as any[]
+                        ).reduce((acc: any, a: any) => {
+                          const key = a.quiz?.id || `quiz-${a.id}`;
+                          const pct = a.totalQuestions
+                            ? (a.score * 100) / a.totalQuestions
+                            : 0;
+                          if (!acc[key]) acc[key] = [pct];
+                          else acc[key].push(pct);
+                          return acc;
+                        }, {});
+                        const bestPercents = Object.values(grouped).map(
+                          (arr: number[]) => Math.round(Math.max(...arr))
+                        );
+                        const avg =
+                          bestPercents.reduce((s, v) => s + v, 0) /
+                          bestPercents.length;
+                        return Math.round(avg);
+                      })()}
                   {!resultsLoading && "%"}
                 </p>
               </div>
@@ -384,7 +548,11 @@ const UserDashboard: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {departmentCourses.map((course) => (
-                <AvailableCourseCard key={course.id} course={course} participantId={username || ""} />
+                <AvailableCourseCard
+                  key={course.id}
+                  course={course}
+                  participantId={username || ""}
+                />
               ))}
             </div>
           )}
@@ -429,7 +597,9 @@ const UserDashboard: React.FC = () => {
                     <div className="flex flex-col gap-2 text-sm text-slate-500 dark:text-slate-500 mb-4 pb-4 border-b border-purple-200 dark:border-purple-500/10">
                       {assessment.questionCount > 0 && (
                         <span>
-                          {assessment.questionsToPresent || assessment.questionCount} questions
+                          {assessment.questionsToPresent ||
+                            assessment.questionCount}{" "}
+                          questions
                         </span>
                       )}
                     </div>
@@ -459,7 +629,12 @@ const UserDashboard: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {departmentCourses.map((course) => (
-                <CourseProgressCard key={course.id} course={course} participantId={username || ""} section="inProgress" />
+                <CourseProgressCard
+                  key={course.id}
+                  course={course}
+                  participantId={username || ""}
+                  section="inProgress"
+                />
               ))}
             </div>
           )}
@@ -477,7 +652,12 @@ const UserDashboard: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {departmentCourses.map((course) => (
-                <CourseProgressCard key={course.id} course={course} participantId={username || ""} section="completed" />
+                <CourseProgressCard
+                  key={course.id}
+                  course={course}
+                  participantId={username || ""}
+                  section="completed"
+                />
               ))}
             </div>
           )}
@@ -494,21 +674,33 @@ const UserDashboard: React.FC = () => {
                 <table className="w-full">
                   <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-sky-200 dark:border-sky-500/20">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Assessment</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Best</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Attempts (percentages)</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Last Attempt</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                        Assessment
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                        Best
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                        Attempts (percentages)
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                        Last Attempt
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-sky-200 dark:divide-sky-500/20">
                     {Object.values(
                       (myAttempts as any[]).reduce((acc: any, a: any) => {
                         const key = a.quiz?.id || `quiz-${a.id}`;
-                        const pct = a.totalQuestions ? Math.round((a.score * 100) / a.totalQuestions) : 0;
+                        const pct = a.totalQuestions
+                          ? Math.round((a.score * 100) / a.totalQuestions)
+                          : 0;
                         if (!acc[key]) {
                           acc[key] = {
                             key,
-                            name: a.quiz?.name || `Assessment #${a.quiz?.id || a.id}`,
+                            name:
+                              a.quiz?.name ||
+                              `Assessment #${a.quiz?.id || a.id}`,
                             list: [pct],
                             best: pct,
                             last: a.completedAt || null,
@@ -517,18 +709,34 @@ const UserDashboard: React.FC = () => {
                           acc[key].list.push(pct);
                           acc[key].best = Math.max(acc[key].best, pct);
                           // last attempt = max completedAt, fallback to existing if nulls
-                          const curr = acc[key].last ? new Date(acc[key].last).getTime() : 0;
-                          const incoming = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-                          if (incoming >= curr) acc[key].last = a.completedAt || acc[key].last;
+                          const curr = acc[key].last
+                            ? new Date(acc[key].last).getTime()
+                            : 0;
+                          const incoming = a.completedAt
+                            ? new Date(a.completedAt).getTime()
+                            : 0;
+                          if (incoming >= curr)
+                            acc[key].last = a.completedAt || acc[key].last;
                         }
                         return acc;
                       }, {})
                     ).map((row: any) => (
-                      <tr key={row.key} className="hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors">
-                        <td className="px-6 py-3 text-sm text-slate-800 dark:text-white">{row.name}</td>
-                        <td className="px-6 py-3 text-sm text-slate-800 dark:text-white">{row.best}%</td>
-                        <td className="px-6 py-3 text-sm text-slate-600 dark:text-slate-400">{row.list.map((p: number) => `${p}%`).join(', ')}</td>
-                        <td className="px-6 py-3 text-sm text-slate-600 dark:text-slate-400">{row.last ? formatDateTime(row.last) : '—'}</td>
+                      <tr
+                        key={row.key}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors"
+                      >
+                        <td className="px-6 py-3 text-sm text-slate-800 dark:text-white">
+                          {row.name}
+                        </td>
+                        <td className="px-6 py-3 text-sm text-slate-800 dark:text-white">
+                          {row.best}%
+                        </td>
+                        <td className="px-6 py-3 text-sm text-slate-600 dark:text-slate-400">
+                          {row.list.map((p: number) => `${p}%`).join(", ")}
+                        </td>
+                        <td className="px-6 py-3 text-sm text-slate-600 dark:text-slate-400">
+                          {row.last ? formatDateTime(row.last) : "—"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -544,7 +752,8 @@ const UserDashboard: React.FC = () => {
             <div className="bg-white dark:bg-slate-800/50 rounded-xl p-8 text-center border border-purple-200 dark:border-purple-500/20">
               <FileText className="mx-auto h-12 w-12 text-purple-500/30 mb-4" />
               <p className="text-slate-600 dark:text-slate-400">
-                No assessment results yet. Complete an assessment to see your results here.
+                No assessment results yet. Complete an assessment to see your
+                results here.
               </p>
             </div>
           ) : null}

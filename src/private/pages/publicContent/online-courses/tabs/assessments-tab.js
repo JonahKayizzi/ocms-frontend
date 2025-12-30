@@ -28,6 +28,7 @@ import {
 import AssessmentForm from "../forms/assessment-form";
 import {
   useGetAssessmentsByCourseQuery,
+  useAwardMarksForStructuredQuestionMutation,
   useGetStandaloneAssessmentsQuery,
   useCreateAssessmentMutation,
   useUpdateAssessmentMutation,
@@ -300,11 +301,14 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     skip: !assessmentId,
   });
   const [fetchAttemptDetail] = useLazyGetQuizAttemptByIdQuery();
+  const [awardMarks] = useAwardMarksForStructuredQuestionMutation();
   const [attemptDetails, setAttemptDetails] = useState({});
   const [attemptDetailErrors, setAttemptDetailErrors] = useState({});
   const [loadingAttemptId, setLoadingAttemptId] = useState(null);
   const [expandedAttemptId, setExpandedAttemptId] = useState(null);
   const [activeTab, setActiveTab] = useState("detailed"); // "detailed" or "summary"
+  const [marksEditing, setMarksEditing] = useState({}); // Track which questions are being edited
+  const [marksData, setMarksData] = useState({}); // Store marks input: { attemptId-questionId: { awarded: number, max: number } }
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -325,12 +329,15 @@ function AssessmentResultsPanel({ assessment, onClose }) {
   // Calculate summarized performance (best attempt per user)
   const summarizedPerformance = useMemo(() => {
     const userBestAttempts = {};
-    
-    attemptList.forEach(attempt => {
+
+    attemptList.forEach((attempt) => {
       const userId = attempt.participantId;
       const percentage = attempt.percentage || 0;
-      
-      if (!userBestAttempts[userId] || percentage > userBestAttempts[userId].percentage) {
+
+      if (
+        !userBestAttempts[userId] ||
+        percentage > userBestAttempts[userId].percentage
+      ) {
         userBestAttempts[userId] = {
           participantId: userId,
           bestAttempt: attempt,
@@ -340,142 +347,186 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           passed: attempt.passed,
           completedAt: attempt.completedAt,
           attemptNumber: attempt.attemptNumber,
-          totalAttempts: attemptList.filter(a => a.participantId === userId).length
+          totalAttempts: attemptList.filter((a) => a.participantId === userId)
+            .length,
         };
       }
     });
-    
-    return Object.values(userBestAttempts).sort((a, b) => b.percentage - a.percentage);
+
+    return Object.values(userBestAttempts).sort(
+      (a, b) => b.percentage - a.percentage
+    );
   }, [attemptList]);
 
   // Export functions
   const exportToPDF = () => {
     const doc = new jsPDF();
-    
+
     // Title
     doc.setFontSize(18);
-    doc.setFont(undefined, 'bold');
-    doc.text(`Assessment Results: ${assessment?.name || 'Assessment'}`, 14, 20);
-    
+    doc.setFont(undefined, "bold");
+    doc.text(`Assessment Results: ${assessment?.name || "Assessment"}`, 14, 20);
+
     // Assessment info
     doc.setFontSize(12);
-    doc.setFont(undefined, 'normal');
-    doc.text(`Assessment: ${assessment?.name || 'N/A'}`, 14, 35);
+    doc.setFont(undefined, "normal");
+    doc.text(`Assessment: ${assessment?.name || "N/A"}`, 14, 35);
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 45);
-    
+
     // Statistics
     doc.setFontSize(14);
-    doc.setFont(undefined, 'bold');
-    doc.text('Overall Statistics', 14, 65);
-    
+    doc.setFont(undefined, "bold");
+    doc.text("Overall Statistics", 14, 65);
+
     doc.setFontSize(11);
-    doc.setFont(undefined, 'normal');
+    doc.setFont(undefined, "normal");
     const statsData = [
-      ['Total Attempts', summary.totalAttempts.toString()],
-      ['Unique Participants', summary.participants.toString()],
-      ['Average Score', `${summary.avgScore}%`],
-      ['Pass Rate', `${summary.passRate}%`]
+      ["Total Attempts", summary.totalAttempts.toString()],
+      ["Unique Participants", summary.participants.toString()],
+      ["Average Score", `${summary.avgScore}%`],
+      ["Pass Rate", `${summary.passRate}%`],
     ];
-    
+
     autoTable(doc, {
       startY: 75,
-      head: [['Metric', 'Value']],
+      head: [["Metric", "Value"]],
       body: statsData,
-      theme: 'grid',
+      theme: "grid",
       headStyles: { fillColor: [59, 130, 246] },
-      margin: { left: 14 }
+      margin: { left: 14 },
     });
-    
+
     // Summary Performance
     let summaryStartY = 140; // Fixed position to avoid finalY issues
     doc.setFontSize(14);
-    doc.setFont(undefined, 'bold');
-    doc.text('Best Performance Summary', 14, summaryStartY);
-    
+    doc.setFont(undefined, "bold");
+    doc.text("Best Performance Summary", 14, summaryStartY);
+
     const summaryTableData = summarizedPerformance.map((user, index) => [
       (index + 1).toString(),
       user.participantId,
       `${user.score}/${user.totalQuestions}`,
       `${user.percentage}%`,
-      user.passed ? 'Pass' : 'Fail',
+      user.passed ? "Pass" : "Fail",
       user.totalAttempts.toString(),
-      new Date(user.completedAt).toLocaleDateString()
+      new Date(user.completedAt).toLocaleDateString(),
     ]);
-    
+
     autoTable(doc, {
       startY: summaryStartY + 10,
-      head: [['Rank', 'Participant', 'Score', 'Percentage', 'Status', 'Total Attempts', 'Date']],
+      head: [
+        [
+          "Rank",
+          "Participant",
+          "Score",
+          "Percentage",
+          "Status",
+          "Total Attempts",
+          "Date",
+        ],
+      ],
       body: summaryTableData,
-      theme: 'striped',
+      theme: "striped",
       headStyles: { fillColor: [59, 130, 246] },
       margin: { left: 14 },
       columnStyles: {
-        3: { halign: 'center' },
-        4: { halign: 'center' },
-        5: { halign: 'center' }
-      }
+        3: { halign: "center" },
+        4: { halign: "center" },
+        5: { halign: "center" },
+      },
     });
-    
+
     // Save the PDF
-    doc.save(`${assessment?.name || 'Assessment'}_Results_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(
+      `${assessment?.name || "Assessment"}_Results_${
+        new Date().toISOString().split("T")[0]
+      }.pdf`
+    );
   };
 
   const exportToExcel = () => {
     // Create workbook
     const wb = XLSX.utils.book_new();
-    
+
     // Statistics sheet
     const statsData = [
-      ['Assessment Results Report'],
-      [''],
-      ['Assessment:', assessment?.name || 'N/A'],
-      ['Generated:', new Date().toLocaleDateString()],
-      [''],
-      ['Overall Statistics'],
-      ['Total Attempts', summary.totalAttempts],
-      ['Unique Participants', summary.participants],
-      ['Average Score', `${summary.avgScore}%`],
-      ['Pass Rate', `${summary.passRate}%`]
+      ["Assessment Results Report"],
+      [""],
+      ["Assessment:", assessment?.name || "N/A"],
+      ["Generated:", new Date().toLocaleDateString()],
+      [""],
+      ["Overall Statistics"],
+      ["Total Attempts", summary.totalAttempts],
+      ["Unique Participants", summary.participants],
+      ["Average Score", `${summary.avgScore}%`],
+      ["Pass Rate", `${summary.passRate}%`],
     ];
-    
+
     const statsWs = XLSX.utils.aoa_to_sheet(statsData);
-    XLSX.utils.book_append_sheet(wb, statsWs, 'Statistics');
-    
+    XLSX.utils.book_append_sheet(wb, statsWs, "Statistics");
+
     // Summary Performance sheet
-    const summaryHeaders = ['Rank', 'Participant ID', 'Score', 'Total Questions', 'Percentage', 'Status', 'Total Attempts', 'Best Attempt Date'];
+    const summaryHeaders = [
+      "Rank",
+      "Participant ID",
+      "Score",
+      "Total Questions",
+      "Percentage",
+      "Status",
+      "Total Attempts",
+      "Best Attempt Date",
+    ];
     const summaryData = summarizedPerformance.map((user, index) => [
       index + 1,
       user.participantId,
       user.score,
       user.totalQuestions,
       `${user.percentage}%`,
-      user.passed ? 'Pass' : 'Fail',
+      user.passed ? "Pass" : "Fail",
       user.totalAttempts,
-      new Date(user.completedAt).toLocaleDateString()
+      new Date(user.completedAt).toLocaleDateString(),
     ]);
-    
+
     const summaryWs = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryData]);
-    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary Performance');
-    
+    XLSX.utils.book_append_sheet(wb, summaryWs, "Summary Performance");
+
     // Detailed Attempts sheet
-    const detailedHeaders = ['Participant ID', 'Attempt Number', 'Score', 'Total Questions', 'Percentage', 'Status', 'Started At', 'Completed At', 'Duration (min)'];
-    const detailedData = attemptList.map(attempt => [
+    const detailedHeaders = [
+      "Participant ID",
+      "Attempt Number",
+      "Score",
+      "Total Questions",
+      "Percentage",
+      "Status",
+      "Started At",
+      "Completed At",
+      "Duration (min)",
+    ];
+    const detailedData = attemptList.map((attempt) => [
       attempt.participantId,
       attempt.attemptNumber,
       attempt.score,
       attempt.totalQuestions,
       `${attempt.percentage}%`,
-      attempt.passed ? 'Pass' : 'Fail',
+      attempt.passed ? "Pass" : "Fail",
       new Date(attempt.startedAt).toLocaleString(),
       new Date(attempt.completedAt).toLocaleString(),
-      attempt.durationMinutes || 0
+      attempt.durationMinutes || 0,
     ]);
-    
-    const detailedWs = XLSX.utils.aoa_to_sheet([detailedHeaders, ...detailedData]);
-    XLSX.utils.book_append_sheet(wb, detailedWs, 'All Attempts');
-    
+
+    const detailedWs = XLSX.utils.aoa_to_sheet([
+      detailedHeaders,
+      ...detailedData,
+    ]);
+    XLSX.utils.book_append_sheet(wb, detailedWs, "All Attempts");
+
     // Save the Excel file
-    XLSX.writeFile(wb, `${assessment?.name || 'Assessment'}_Results_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(
+      wb,
+      `${assessment?.name || "Assessment"}_Results_${
+        new Date().toISOString().split("T")[0]
+      }.xlsx`
+    );
   };
 
   const summary = useMemo(() => {
@@ -488,7 +539,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
         passRate: Math.round(analytics.passRate || 0),
       };
     }
-    
+
     // Fallback to frontend calculation if analytics not available
     if (attemptList.length === 0) {
       return {
@@ -578,26 +629,669 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     },
   ];
 
+  // Export assessment report as PDF
+  const exportReportToPDF = async (attempt) => {
+    const questionPerformances =
+      attemptDetails[attempt.id]?.questionPerformances || [];
+    const legacyAnswers =
+      attemptDetails[attempt.id]?.answers || attempt.answers || [];
+    const answers =
+      questionPerformances.length > 0 ? questionPerformances : legacyAnswers;
+
+    // Calculate report metrics (same as renderAssessmentReport)
+    const totalQuestions = attempt.totalQuestions || answers.length || 0;
+    const score = attempt.score || 0;
+    const percentage =
+      attempt.percentage ||
+      (totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0);
+    const passFail =
+      percentage >= (assessment.passingScore || 50) ? "Pass" : "Fail";
+
+    let totalMarks = 0;
+    let maxMarks = 0;
+    let negativeMarks = 0;
+    let correctCount = 0;
+    let partiallyCorrectCount = 0;
+    let incorrectCount = 0;
+    let unansweredCount = 0;
+
+    answers.forEach((answer) => {
+      const isStructured =
+        answer.questionType === "structured" ||
+        answer.question?.questionType === "structured" ||
+        !answer.options ||
+        (Array.isArray(answer.options) && answer.options.length === 0);
+
+      if (isStructured) {
+        if (answer.awardedMarks !== null && answer.awardedMarks !== undefined) {
+          totalMarks += answer.awardedMarks;
+          maxMarks += answer.maxMarks || 0;
+          if (
+            answer.awardedMarks > 0 &&
+            answer.awardedMarks < (answer.maxMarks || 0)
+          ) {
+            partiallyCorrectCount++;
+          } else if (answer.awardedMarks >= (answer.maxMarks || 0)) {
+            correctCount++;
+          } else {
+            incorrectCount++;
+          }
+        } else {
+          unansweredCount++;
+          maxMarks += answer.maxMarks || 10;
+        }
+      } else {
+        const isCorrect =
+          answer.isCorrect ||
+          (answer.selectedOptionId !== null &&
+            answer.selectedOptionId === answer.correctOptionId);
+
+        if (
+          answer.selectedOptionId === null ||
+          answer.selectedOptionId === undefined
+        ) {
+          unansweredCount++;
+        } else if (isCorrect) {
+          correctCount++;
+          totalMarks += 1;
+          maxMarks += 1;
+        } else {
+          incorrectCount++;
+          maxMarks += 1;
+          negativeMarks += 0.25;
+        }
+      }
+    });
+
+    const timeTaken = attempt.durationSeconds
+      ? formatDuration(attempt.durationSeconds)
+      : attempt.durationMinutes
+      ? `${attempt.durationMinutes} minutes`
+      : "—";
+
+    const attemptNumber = attempt.attemptNumber || 1;
+    const attemptDate = attempt.completedAt
+      ? formatDateTime(attempt.completedAt)
+      : attempt.createdAt
+      ? formatDateTime(attempt.createdAt)
+      : "—";
+
+    // Create PDF
+    const doc = new jsPDF();
+
+    // Load and add logo
+    try {
+      const logoImg = new Image();
+      logoImg.crossOrigin = "anonymous";
+      logoImg.src = "/caa_logo.png";
+
+      await new Promise((resolve, reject) => {
+        logoImg.onload = () => {
+          try {
+            // Add logo to PDF (left side, top)
+            const logoWidth = 25;
+            const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
+            doc.addImage(logoImg, "PNG", 20, 8, logoWidth, logoHeight);
+            resolve();
+          } catch (error) {
+            console.error("Error adding logo to PDF:", error);
+            resolve(); // Continue even if logo fails
+          }
+        };
+        logoImg.onerror = () => {
+          console.warn("Logo image failed to load, continuing without logo");
+          resolve(); // Continue even if logo fails
+        };
+      });
+    } catch (error) {
+      console.warn("Error loading logo:", error);
+    }
+
+    // Header with text (matching screenshot format)
+    // MANSOPS PART III - AIM (centered)
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0); // Black
+    doc.text("MANSOPS PART III - AIM", 105, 12, { align: "center" });
+
+    // Appendix 4 (right side)
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Appendix 4", 190, 12, { align: "right" });
+
+    // Main title
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("ONLINE KNOWLEDGE/PROFICIENCY ASSESSMENT REPORT", 105, 25, {
+      align: "center",
+    });
+
+    // Subtitle
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      `Scorecard | ${assessment.name} – ${attemptDate} (${attemptNumber}${
+        attemptNumber === 1
+          ? "st"
+          : attemptNumber === 2
+          ? "nd"
+          : attemptNumber === 3
+          ? "rd"
+          : "th"
+      } attempt)`,
+      105,
+      32,
+      { align: "center" }
+    );
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "italic");
+    doc.text("Applicable to each competency", 105, 38, { align: "center" });
+
+    // Report table data
+    const tableData = [
+      ["1", "Score", `${percentage}%`],
+      ["2", "Pass/fail", passFail],
+      ["3", "Total number of questions", totalQuestions.toString()],
+      ["4", "Marks", `${totalMarks.toFixed(2)} / ${maxMarks.toFixed(2)}`],
+      [
+        "5",
+        "Negative marks",
+        negativeMarks > 0 ? negativeMarks.toFixed(2) : "0.00",
+      ],
+      ["6", "Time taken", timeTaken],
+      ["7", "Number of correct", correctCount.toString()],
+      ["8", "Number of partially correct", partiallyCorrectCount.toString()],
+      ["9", "Number incorrect", incorrectCount.toString()],
+      ["10", "Number unanswered", unansweredCount.toString()],
+      ["11", "Section-wise summary", "Use present style"],
+    ];
+
+    // Add table (adjusted startY to account for new header layout)
+    autoTable(doc, {
+      startY: 42,
+      head: [["Nr", "Item", "Result"]],
+      body: tableData,
+      theme: "striped",
+      headStyles: {
+        fillColor: [243, 244, 246],
+        textColor: [55, 65, 81],
+        fontStyle: "bold",
+        fontSize: 10,
+      },
+      bodyStyles: {
+        textColor: [55, 65, 81],
+        fontSize: 10,
+      },
+      columnStyles: {
+        0: { cellWidth: 20, halign: "left" },
+        1: { cellWidth: 120, halign: "left" },
+        2: { cellWidth: 50, halign: "left" },
+      },
+      margin: { left: 20, right: 20 },
+    });
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+
+      // Footer text
+      const footerY = doc.internal.pageSize.height - 20;
+      doc.text("UCAA/DANS/AIM/OF/88a", 20, footerY);
+      doc.text("APP 4-267", 105, footerY, { align: "center" });
+      doc.text(`Rev 00, date 01/01/2026`, 190, footerY, { align: "right" });
+
+      doc.setFont("helvetica", "italic");
+      doc.text(
+        "This is a controlled document and must be checked against the master documents list for the latest revision level",
+        105,
+        footerY + 6,
+        { align: "center", maxWidth: 170 }
+      );
+    }
+
+    // Save PDF
+    const fileName = `Assessment_Report_${assessment.name.replace(
+      /\s+/g,
+      "_"
+    )}_${attempt.participantId}_${attemptNumber}.pdf`;
+    doc.save(fileName);
+  };
+
+  // Render the assessment report based on the template
+  const renderAssessmentReport = (attempt) => {
+    const questionPerformances =
+      attemptDetails[attempt.id]?.questionPerformances || [];
+    const legacyAnswers =
+      attemptDetails[attempt.id]?.answers || attempt.answers || [];
+    const answers =
+      questionPerformances.length > 0 ? questionPerformances : legacyAnswers;
+
+    // Calculate report metrics
+    const totalQuestions = attempt.totalQuestions || answers.length || 0;
+    const score = attempt.score || 0;
+    const percentage =
+      attempt.percentage ||
+      (totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0);
+    const passFail =
+      percentage >= (assessment.passingScore || 50) ? "Pass" : "Fail";
+
+    // Calculate marks
+    let totalMarks = 0;
+    let maxMarks = 0;
+    let negativeMarks = 0;
+
+    // Count question types
+    let correctCount = 0;
+    let partiallyCorrectCount = 0;
+    let incorrectCount = 0;
+    let unansweredCount = 0;
+
+    answers.forEach((answer) => {
+      const isStructured =
+        answer.questionType === "structured" ||
+        answer.question?.questionType === "structured" ||
+        !answer.options ||
+        (Array.isArray(answer.options) && answer.options.length === 0);
+
+      if (isStructured) {
+        // For structured questions
+        if (answer.awardedMarks !== null && answer.awardedMarks !== undefined) {
+          totalMarks += answer.awardedMarks;
+          maxMarks += answer.maxMarks || 0;
+          if (
+            answer.awardedMarks > 0 &&
+            answer.awardedMarks < (answer.maxMarks || 0)
+          ) {
+            partiallyCorrectCount++;
+          } else if (answer.awardedMarks >= (answer.maxMarks || 0)) {
+            correctCount++;
+          } else {
+            incorrectCount++;
+          }
+        } else {
+          unansweredCount++;
+          maxMarks += answer.maxMarks || 10; // Default max marks if not set
+        }
+      } else {
+        // For multiple choice questions
+        const isCorrect =
+          answer.isCorrect ||
+          (answer.selectedOptionId !== null &&
+            answer.selectedOptionId === answer.correctOptionId);
+
+        if (
+          answer.selectedOptionId === null ||
+          answer.selectedOptionId === undefined
+        ) {
+          unansweredCount++;
+        } else if (isCorrect) {
+          correctCount++;
+          totalMarks += 1; // Assuming 1 mark per correct answer
+          maxMarks += 1;
+        } else {
+          incorrectCount++;
+          maxMarks += 1;
+          // Negative marking if applicable (assuming 0.25 negative marks per wrong answer)
+          negativeMarks += 0.25;
+        }
+      }
+    });
+
+    const timeTaken = attempt.durationSeconds
+      ? formatDuration(attempt.durationSeconds)
+      : attempt.durationMinutes
+      ? `${attempt.durationMinutes} minutes`
+      : "—";
+
+    const attemptNumber = attempt.attemptNumber || 1;
+    const attemptDate = attempt.completedAt
+      ? formatDateTime(attempt.completedAt)
+      : attempt.createdAt
+      ? formatDateTime(attempt.createdAt)
+      : "—";
+
+    return (
+      <div className="bg-white rounded-lg border border-gray-300 shadow-sm mb-6">
+        {/* Report Header */}
+        <div className="bg-gray-100 border-b border-gray-300 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              {/* Logo and header section matching screenshot */}
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center">
+                  <img
+                    src="/caa_logo.png"
+                    alt="CAA Logo"
+                    className="h-12 w-auto"
+                    onError={(e) => {
+                      console.error("Failed to load logo");
+                      e.target.style.display = "none";
+                    }}
+                  />
+                </div>
+                <div className="flex-1 text-center">
+                  <h4 className="text-sm font-bold text-gray-900">
+                    MANSOPS PART III - AIM
+                  </h4>
+                </div>
+                <div className="text-sm font-bold text-gray-900">
+                  Appendix 4
+                </div>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 text-center">
+                ONLINE KNOWLEDGE/PROFICIENCY ASSESSMENT REPORT
+              </h3>
+              <p className="text-sm text-gray-600 mt-1 text-center">
+                Scorecard | {assessment.name} – {attemptDate} ({attemptNumber}
+                {attemptNumber === 1
+                  ? "st"
+                  : attemptNumber === 2
+                  ? "nd"
+                  : attemptNumber === 3
+                  ? "rd"
+                  : "th"}{" "}
+                attempt)
+              </p>
+              <p className="text-xs text-gray-500 mt-1 italic text-center">
+                Applicable to each competency
+              </p>
+            </div>
+            <div className="ml-4">
+              <button
+                onClick={() => exportReportToPDF(attempt)}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export PDF
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Report Table */}
+        <div className="px-6 py-4">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-16">
+                  Nr
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                  Item
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                  Result
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              <tr>
+                <td className="px-4 py-3 text-sm text-gray-900">1</td>
+                <td className="px-4 py-3 text-sm text-gray-700">Score</td>
+                <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                  {percentage}%
+                </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-sm text-gray-900">2</td>
+                <td className="px-4 py-3 text-sm text-gray-700">Pass/fail</td>
+                <td className="px-4 py-3 text-sm">
+                  <span
+                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      passFail === "Pass"
+                        ? "bg-green-100 text-green-800"
+                        : "bg-red-100 text-red-800"
+                    }`}
+                  >
+                    {passFail}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-sm text-gray-900">3</td>
+                <td className="px-4 py-3 text-sm text-gray-700">
+                  Total number of questions
+                </td>
+                <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                  {totalQuestions}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-sm text-gray-900">4</td>
+                <td className="px-4 py-3 text-sm text-gray-700">Marks</td>
+                <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                  {totalMarks.toFixed(2)} / {maxMarks.toFixed(2)}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-sm text-gray-900">5</td>
+                <td className="px-4 py-3 text-sm text-gray-700">
+                  Negative marks
+                </td>
+                <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                  {negativeMarks > 0 ? negativeMarks.toFixed(2) : "0.00"}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-sm text-gray-900">6</td>
+                <td className="px-4 py-3 text-sm text-gray-700">Time taken</td>
+                <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                  {timeTaken}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-sm text-gray-900">7</td>
+                <td className="px-4 py-3 text-sm text-gray-700">
+                  Number of correct
+                </td>
+                <td className="px-4 py-3 text-sm font-semibold text-green-600">
+                  {correctCount}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-sm text-gray-900">8</td>
+                <td className="px-4 py-3 text-sm text-gray-700">
+                  Number of partially correct
+                </td>
+                <td className="px-4 py-3 text-sm font-semibold text-amber-600">
+                  {partiallyCorrectCount}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-sm text-gray-900">9</td>
+                <td className="px-4 py-3 text-sm text-gray-700">
+                  Number incorrect
+                </td>
+                <td className="px-4 py-3 text-sm font-semibold text-red-600">
+                  {incorrectCount}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-sm text-gray-900">10</td>
+                <td className="px-4 py-3 text-sm text-gray-700">
+                  Number unanswered
+                </td>
+                <td className="px-4 py-3 text-sm font-semibold text-gray-600">
+                  {unansweredCount}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-sm text-gray-900">11</td>
+                <td className="px-4 py-3 text-sm text-gray-700">
+                  Section-wise summary
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-500 italic">
+                  Use present style
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Report Footer */}
+        <div className="bg-gray-50 border-t border-gray-300 px-6 py-3">
+          <div className="flex justify-between items-center text-xs text-gray-600">
+            <div>UCAA/DANS/AIM/OF/88a</div>
+            <div>APP 4-267</div>
+            <div>
+              Rev 00, date{" "}
+              {new Date().toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              })}
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-2 italic text-center">
+            This is a controlled document and must be checked against the master
+            documents list for the latest revision level
+          </p>
+        </div>
+      </div>
+    );
+  };
+
   const renderAttemptAnswers = (attempt) => {
     // Handle both new format (questionPerformances) and legacy format (answers)
-    const questionPerformances = attemptDetails[attempt.id]?.questionPerformances || [];
-    const legacyAnswers = attemptDetails[attempt.id]?.answers || attempt.answers || [];
-    
+    const questionPerformances =
+      attemptDetails[attempt.id]?.questionPerformances || [];
+    const legacyAnswers =
+      attemptDetails[attempt.id]?.answers || attempt.answers || [];
+
     // Convert questionPerformances to the expected answers format
-    const answers = questionPerformances.length > 0 
-      ? questionPerformances.map(perf => ({
-          questionId: perf.questionId,
-          questionText: perf.questionText,
-          selectedAnswerId: perf.selectedAnswerId,
-          selectedAnswerText: perf.selectedAnswerText || (perf.selectedAnswerId ? 
-            perf.options?.find(opt => opt.id === perf.selectedAnswerId)?.text : "No answer"),
-          correctAnswerId: perf.correctAnswerId,
-          correctAnswerText: perf.correctAnswerText,
-          isCorrect: perf.correct,
-          options: perf.options || []
-        }))
-      : legacyAnswers;
-    
+    const answers =
+      questionPerformances.length > 0
+        ? questionPerformances.map((perf) => {
+            // Better detection of question type - prioritize explicit questionType
+            const hasOptions =
+              perf.options &&
+              Array.isArray(perf.options) &&
+              perf.options.length > 0;
+            const hasStructuredAnswer =
+              perf.structuredAnswer && perf.structuredAnswer.trim() !== "";
+            const hasSelectedOption =
+              perf.selectedAnswerId !== null &&
+              perf.selectedAnswerId !== undefined;
+
+            // Detection priority:
+            // 1. Explicit questionType from API
+            // 2. If structuredAnswer exists, it's structured
+            // 3. If no options and no selectedAnswerId, it's structured
+            // 4. Otherwise, it's multiple_choice
+            const detectedType =
+              perf.questionType ||
+              perf.question?.questionType ||
+              (hasStructuredAnswer
+                ? "structured"
+                : !hasOptions && !hasSelectedOption
+                ? "structured"
+                : "multiple_choice");
+
+            // Extract selected answer text - check multiple sources for better coverage
+            const selectedOptionText =
+              perf.selectedAnswerText ||
+              (perf.selectedAnswerId && perf.options
+                ? perf.options.find((opt) => opt.id === perf.selectedAnswerId)
+                    ?.text ||
+                  perf.options.find((opt) => opt.id === perf.selectedAnswerId)
+                    ?.optionText
+                : null);
+
+            // Extract correct answer text
+            const correctOptionText =
+              perf.correctAnswerText ||
+              (perf.correctAnswerId && perf.options
+                ? perf.options.find((opt) => opt.id === perf.correctAnswerId)
+                    ?.text ||
+                  perf.options.find((opt) => opt.id === perf.correctAnswerId)
+                    ?.optionText
+                : null);
+
+            return {
+              questionId: perf.questionId,
+              questionText: perf.questionText,
+              questionType: detectedType,
+              selectedAnswerId: perf.selectedAnswerId,
+              selectedOptionId: perf.selectedAnswerId,
+              selectedAnswerText: selectedOptionText,
+              selectedOptionText: selectedOptionText,
+              structuredAnswer:
+                perf.structuredAnswer ||
+                (detectedType === "structured"
+                  ? perf.selectedAnswerText
+                  : null),
+              correctAnswerId: perf.correctAnswerId,
+              correctOptionId: perf.correctAnswerId,
+              correctAnswerText: correctOptionText,
+              correctOptionText: correctOptionText,
+              isCorrect: perf.correct,
+              awardedMarks: perf.awardedMarks,
+              maxMarks: perf.maxMarks,
+              options: perf.options || [],
+            };
+          })
+        : legacyAnswers.map((ans) => {
+            // Better detection for legacy answers too
+            const hasOptions =
+              ans.options &&
+              Array.isArray(ans.options) &&
+              ans.options.length > 0;
+            const hasStructuredAnswer =
+              ans.structuredAnswer && ans.structuredAnswer.trim() !== "";
+            const hasSelectedOption =
+              ans.selectedOptionId !== null &&
+              ans.selectedOptionId !== undefined;
+
+            // Same detection priority as new format
+            const detectedType =
+              ans.questionType ||
+              ans.question?.questionType ||
+              (hasStructuredAnswer
+                ? "structured"
+                : !hasOptions && !hasSelectedOption
+                ? "structured"
+                : "multiple_choice");
+
+            // Extract answer text for legacy format
+            const selectedOptionText =
+              ans.selectedOptionText ||
+              ans.selectedAnswerText ||
+              (ans.selectedOptionId && ans.options
+                ? ans.options.find((opt) => opt.id === ans.selectedOptionId)
+                    ?.text ||
+                  ans.options.find((opt) => opt.id === ans.selectedOptionId)
+                    ?.optionText
+                : null);
+
+            const correctOptionText =
+              ans.correctOptionText ||
+              ans.correctAnswerText ||
+              (ans.correctOptionId && ans.options
+                ? ans.options.find((opt) => opt.id === ans.correctOptionId)
+                    ?.text ||
+                  ans.options.find((opt) => opt.id === ans.correctOptionId)
+                    ?.optionText
+                : null);
+
+            return {
+              ...ans,
+              questionType: detectedType,
+              selectedOptionText: selectedOptionText,
+              selectedAnswerText: selectedOptionText,
+              structuredAnswer:
+                ans.structuredAnswer ||
+                (detectedType === "structured" ? ans.selectedAnswerText : null),
+              correctOptionText: correctOptionText,
+              correctAnswerText: correctOptionText,
+              awardedMarks: ans.awardedMarks,
+              maxMarks: ans.maxMarks,
+            };
+          });
+
     if (loadingAttemptId === attempt.id) {
       return (
         <div className="flex items-center justify-center py-6 text-gray-500">
@@ -627,9 +1321,75 @@ function AssessmentResultsPanel({ assessment, onClose }) {
         </p>
       );
     }
+    const handleSaveMarks = async (
+      attemptId,
+      questionId,
+      awardedMarks,
+      maxMarks
+    ) => {
+      try {
+        await awardMarks({
+          attemptId,
+          questionId,
+          awardedMarks: Number(awardedMarks),
+          maxMarks: Number(maxMarks),
+        }).unwrap();
+
+        // Update local state
+        const key = `${attemptId}-${questionId}`;
+        setMarksEditing((prev) => {
+          const newState = { ...prev };
+          delete newState[key];
+          return newState;
+        });
+
+        // Refresh attempt details
+        fetchAttemptDetails(attemptId);
+      } catch (error) {
+        console.error("Error awarding marks:", error);
+        alert("Failed to save marks. Please try again.");
+      }
+    };
+
     return (
       <ul className="divide-y divide-gray-200">
         {answers.map((answer, index) => {
+          // Detect structured questions: check questionType first, then fallback to checking if it has options
+          const hasOptions =
+            answer.options &&
+            Array.isArray(answer.options) &&
+            answer.options.length > 0;
+          const hasSelectedOption =
+            answer.selectedOptionId !== null &&
+            answer.selectedOptionId !== undefined;
+          const hasCorrectOption =
+            answer.correctOptionId !== null &&
+            answer.correctOptionId !== undefined;
+          // Also check if structuredAnswer exists as a strong indicator
+          const hasStructuredAnswer =
+            answer.structuredAnswer && answer.structuredAnswer.trim() !== "";
+
+          // More robust detection: prioritize questionType, then check for structuredAnswer, then check for absence of options
+          // If questionType is explicitly set to "structured", it's structured
+          // If structuredAnswer exists, it's structured
+          // If no options AND no selectedOptionId AND no correctOptionId AND no selectedAnswerId, it's likely structured
+          // Also check if the question text contains HTML tags (structured questions often have rich text)
+          const questionHasHtml =
+            answer.questionText &&
+            (answer.questionText.includes("<p>") ||
+              answer.questionText.includes("<div>") ||
+              answer.questionText.includes("<br>"));
+
+          const isStructured =
+            answer.questionType === "structured" ||
+            answer.question?.questionType === "structured" ||
+            hasStructuredAnswer ||
+            (!hasOptions &&
+              !hasSelectedOption &&
+              !hasCorrectOption &&
+              !answer.selectedAnswerId) ||
+            (questionHasHtml && !hasOptions && !hasSelectedOption);
+
           const isCorrect =
             typeof answer.isCorrect === "boolean"
               ? answer.isCorrect
@@ -637,60 +1397,312 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                 answer.correctOptionId !== undefined
               ? answer.selectedOptionId === answer.correctOptionId
               : undefined;
-          const questionText =
+          // Get question text - handle both plain text and HTML
+          const rawQuestionText =
             answer.questionText ||
             answer.question?.text ||
             `Question ${index + 1}`;
-          const selectedText =
-            answer.selectedOptionText ||
-            answer.selectedAnswerText ||
-            (typeof answer.selectedAnswer === "string"
-              ? answer.selectedAnswer
-              : null) ||
-            (typeof answer.selectedAnswer === "number"
-              ? `Option ${answer.selectedAnswer + 1}`
-              : "No answer");
+          const questionText = rawQuestionText;
+
+          // Get selected answer - prioritize structuredAnswer for structured questions
+          // For structured questions, look for structuredAnswer, selectedAnswerText, or selectedAnswer (string)
+          // For multiple choice, look for selectedOptionText, selectedAnswerText, or selectedAnswer (number/string)
+          const selectedText = isStructured
+            ? answer.structuredAnswer ||
+              answer.selectedAnswerText ||
+              answer.selectedAnswerText ||
+              (typeof answer.selectedAnswer === "string" &&
+              answer.selectedAnswer.trim() !== ""
+                ? answer.selectedAnswer
+                : null) ||
+              (answer.selectedOptionText &&
+              typeof answer.selectedOptionText === "string"
+                ? answer.selectedOptionText
+                : null) ||
+              "No answer provided"
+            : answer.selectedOptionText ||
+              answer.selectedAnswerText ||
+              (typeof answer.selectedAnswer === "string" &&
+              answer.selectedAnswer.trim() !== ""
+                ? answer.selectedAnswer
+                : null) ||
+              (typeof answer.selectedAnswer === "number"
+                ? `Option ${answer.selectedAnswer + 1}`
+                : null) ||
+              (answer.selectedOptionId &&
+              answer.options &&
+              answer.options.length > 0
+                ? answer.options.find(
+                    (opt) => opt.id === answer.selectedOptionId
+                  )?.text || `Option ${answer.selectedOptionId}`
+                : null) ||
+              "No answer";
           const correctText =
             answer.correctOptionText ||
             answer.correctAnswerText ||
-            "Not provided";
-          const Icon = isCorrect ? CheckCircle : XCircle;
-          const iconClass = isCorrect ? "text-emerald-500" : "text-rose-500";
+            (isStructured ? "Manual grading required" : "Not provided");
+          const Icon = isStructured ? Award : isCorrect ? CheckCircle : XCircle;
+          const iconClass = isStructured
+            ? "text-blue-500"
+            : isCorrect
+            ? "text-emerald-500"
+            : "text-rose-500";
+
+          const marksKey = `${attempt.id}-${answer.questionId}`;
+          const isEditingMarks = marksEditing[marksKey];
+          const currentMarks = marksData[marksKey] || {
+            awarded: answer.awardedMarks || 0,
+            max: answer.maxMarks || 10,
+          };
+
           return (
             <li
               key={`${attempt.id}-${answer.questionId || index}`}
-              className="py-3"
+              className="py-4"
             >
               <div className="flex items-start gap-3">
                 <Icon className={`h-5 w-5 flex-shrink-0 ${iconClass}`} />
                 <div className="flex-1">
-                  <p className="font-medium text-gray-900 mb-1">
-                    {questionText}
-                  </p>
-                  <div className="text-sm text-gray-600 space-y-0.5">
-                    <p>
-                      <span className="font-semibold text-gray-700">
-                        Selected:
-                      </span>{" "}
-                      {selectedText || "No answer"}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-gray-700">
-                        Correct:
-                      </span>{" "}
-                      {correctText}
-                    </p>
+                  <div className="flex items-start justify-between gap-4 mb-2">
+                    {/* Render question text as rich text for structured questions or if it contains HTML tags */}
+                    {isStructured ||
+                    (questionText && questionText.includes("<")) ? (
+                      <div className="font-medium text-gray-900 flex-1">
+                        <div
+                          className="prose prose-sm max-w-none [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:ml-6 [&_ol]:list-decimal [&_ol]:ml-6 [&_strong]:font-bold"
+                          dangerouslySetInnerHTML={{ __html: questionText }}
+                        />
+                      </div>
+                    ) : (
+                      <p className="font-medium text-gray-900">
+                        {questionText}
+                      </p>
+                    )}
+                    {isStructured && (
+                      <span className="text-xs font-semibold px-2 py-1 rounded-full bg-blue-50 text-blue-700">
+                        Structured Question
+                      </span>
+                    )}
                   </div>
+
+                  {isStructured ? (
+                    <div className="space-y-3 mt-2">
+                      <div>
+                        <span className="font-semibold text-gray-700 text-sm block mb-2">
+                          Participant's Answer:
+                        </span>
+                        {selectedText &&
+                        selectedText.trim() !== "" &&
+                        selectedText !== "No answer provided" ? (
+                          <div
+                            className="text-sm text-gray-700 bg-white p-4 rounded-md border border-gray-300 shadow-sm min-h-[100px] prose prose-sm max-w-none [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:ml-6 [&_ol]:list-decimal [&_ol]:ml-6"
+                            dangerouslySetInnerHTML={{ __html: selectedText }}
+                          />
+                        ) : (
+                          <div className="text-sm text-gray-500 bg-gray-50 p-4 rounded-md border border-gray-200 italic">
+                            No answer provided
+                          </div>
+                        )}
+                      </div>
+
+                      {isEditingMarks ? (
+                        <div className="flex items-center gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                          <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-gray-700">
+                              Awarded:
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max={currentMarks.max}
+                              value={currentMarks.awarded}
+                              onChange={(e) =>
+                                setMarksData({
+                                  ...marksData,
+                                  [marksKey]: {
+                                    ...currentMarks,
+                                    awarded: Math.max(
+                                      0,
+                                      Math.min(
+                                        currentMarks.max,
+                                        Number(e.target.value) || 0
+                                      )
+                                    ),
+                                  },
+                                })
+                              }
+                              className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md"
+                            />
+                            <span className="text-sm text-gray-600">/</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={currentMarks.max}
+                              onChange={(e) =>
+                                setMarksData({
+                                  ...marksData,
+                                  [marksKey]: {
+                                    ...currentMarks,
+                                    max: Math.max(
+                                      1,
+                                      Number(e.target.value) || 10
+                                    ),
+                                    awarded: Math.min(
+                                      currentMarks.awarded,
+                                      Math.max(1, Number(e.target.value) || 10)
+                                    ),
+                                  },
+                                })
+                              }
+                              className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md"
+                            />
+                            <span className="text-sm text-gray-600">marks</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleSaveMarks(
+                                  attempt.id,
+                                  answer.questionId,
+                                  currentMarks.awarded,
+                                  currentMarks.max
+                                )
+                              }
+                              className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMarksEditing((prev) => {
+                                  const newState = { ...prev };
+                                  delete newState[marksKey];
+                                  return newState;
+                                });
+                              }}
+                              className="px-3 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 border border-gray-200 rounded-md">
+                          <div className="flex items-center gap-4">
+                            <div className="text-sm">
+                              <span className="font-semibold text-gray-700">
+                                Marks:{" "}
+                              </span>
+                              <span
+                                className={`font-medium ${
+                                  answer.awardedMarks !== null &&
+                                  answer.awardedMarks !== undefined
+                                    ? "text-blue-600"
+                                    : "text-gray-500"
+                                }`}
+                              >
+                                {answer.awardedMarks !== null &&
+                                answer.awardedMarks !== undefined
+                                  ? `${answer.awardedMarks}`
+                                  : "Not graded"}
+                                {answer.maxMarks && ` / ${answer.maxMarks}`}
+                              </span>
+                            </div>
+                            {answer.awardedMarks !== null &&
+                              answer.awardedMarks !== undefined && (
+                                <div className="text-xs text-gray-500">
+                                  {Math.round(
+                                    (answer.awardedMarks / answer.maxMarks) *
+                                      100
+                                  )}
+                                  % score
+                                </div>
+                              )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMarksEditing((prev) => ({
+                                ...prev,
+                                [marksKey]: true,
+                              }));
+                              setMarksData({
+                                ...marksData,
+                                [marksKey]: {
+                                  awarded: answer.awardedMarks || 0,
+                                  max: answer.maxMarks || 10,
+                                },
+                              });
+                            }}
+                            className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                          >
+                            {answer.awardedMarks !== null &&
+                            answer.awardedMarks !== undefined
+                              ? "Edit Marks"
+                              : "Award Marks"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3 mt-2">
+                      <div>
+                        <span className="font-semibold text-gray-700 text-sm block mb-2">
+                          Participant's Answer:
+                        </span>
+                        {selectedText && selectedText !== "No answer" ? (
+                          <div className="text-sm text-gray-700 bg-blue-50 p-3 rounded-md border border-blue-200">
+                            {selectedText}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-md border border-gray-200 italic">
+                            No answer provided
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-700 text-sm block mb-2">
+                          Correct Answer:
+                        </span>
+                        <div className="text-sm text-gray-700 bg-green-50 p-3 rounded-md border border-green-200">
+                          {correctText}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <span
-                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    isCorrect
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-rose-50 text-rose-700"
-                  }`}
-                >
-                  {isCorrect ? "Correct" : "Incorrect"}
-                </span>
+                {/* Only show Correct/Incorrect badge for multiple choice questions, not structured */}
+                {/* Safeguard: Also check for structuredAnswer to prevent showing Incorrect on structured questions */}
+                {!isStructured && !hasStructuredAnswer && (
+                  <span
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      isCorrect
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-rose-50 text-rose-700"
+                    }`}
+                  >
+                    {isCorrect ? "Correct" : "Incorrect"}
+                  </span>
+                )}
+                {/* Show grading status badge for structured questions */}
+                {/* Also show if hasStructuredAnswer even if isStructured detection failed */}
+                {(isStructured || hasStructuredAnswer) && (
+                  <span
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      answer.awardedMarks !== null &&
+                      answer.awardedMarks !== undefined
+                        ? "bg-blue-50 text-blue-700"
+                        : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    {answer.awardedMarks !== null &&
+                    answer.awardedMarks !== undefined
+                      ? "Graded"
+                      : "Pending Review"}
+                  </span>
+                )}
               </div>
             </li>
           );
@@ -828,83 +1840,86 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           {/* Tab Content */}
           {activeTab === "detailed" ? (
             <div className="divide-y divide-gray-200">
-            {attemptList.map((attempt) => {
-              const participantName =
-                attempt.participantName ||
-                attempt.participant?.fullName ||
-                attempt.participant?.username ||
-                attempt.participantId ||
-                "Unknown User";
-              const percent = Number.isFinite(attempt.percentage)
-                ? Math.round(attempt.percentage)
-                : attempt.totalQuestions
-                ? Math.round((attempt.score * 100) / attempt.totalQuestions)
-                : 0;
-              const badgeClass = attempt.passed
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-rose-50 text-rose-700";
-              const badgeText = attempt.passed ? "Passed" : "Failed";
-              const isExpanded = expandedAttemptId === attempt.id;
-              return (
-                <div key={attempt.id}>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleAttempt(attempt.id)}
-                    className="w-full px-4 py-4 flex items-start justify-between gap-4 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
-                          <UserCircle className="h-4 w-4 text-gray-400" />
-                          {participantName}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          Attempt #{attempt.attemptNumber || attempt.id}
-                        </span>
-                        <span
-                          className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badgeClass}`}
-                        >
-                          {badgeText}
-                        </span>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                          {percent}%
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-4 text-xs text-gray-500 mt-2">
-                        <span className="inline-flex items-center gap-1">
-                          <CalendarClock className="h-3.5 w-3.5" />
-                          {formatDateTime(attempt.completedAt)}
-                        </span>
-                        {attempt.durationSeconds !== undefined && (
-                          <span className="inline-flex items-center gap-1">
-                            <Timer className="h-3.5 w-3.5" />
-                            {formatDuration(attempt.durationSeconds)}
+              {attemptList.map((attempt) => {
+                const participantName =
+                  attempt.participantName ||
+                  attempt.participant?.fullName ||
+                  attempt.participant?.username ||
+                  attempt.participantId ||
+                  "Unknown User";
+                const percent = Number.isFinite(attempt.percentage)
+                  ? Math.round(attempt.percentage)
+                  : attempt.totalQuestions
+                  ? Math.round((attempt.score * 100) / attempt.totalQuestions)
+                  : 0;
+                const badgeClass = attempt.passed
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-rose-50 text-rose-700";
+                const badgeText = attempt.passed ? "Passed" : "Failed";
+                const isExpanded = expandedAttemptId === attempt.id;
+                return (
+                  <div key={attempt.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAttempt(attempt.id)}
+                      className="w-full px-4 py-4 flex items-start justify-between gap-4 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
+                            <UserCircle className="h-4 w-4 text-gray-400" />
+                            {participantName}
                           </span>
+                          <span className="text-xs text-gray-500">
+                            Attempt #{attempt.attemptNumber || attempt.id}
+                          </span>
+                          <span
+                            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badgeClass}`}
+                          >
+                            {badgeText}
+                          </span>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                            {percent}%
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-4 text-xs text-gray-500 mt-2">
+                          <span className="inline-flex items-center gap-1">
+                            <CalendarClock className="h-3.5 w-3.5" />
+                            {formatDateTime(attempt.completedAt)}
+                          </span>
+                          {attempt.durationSeconds !== undefined && (
+                            <span className="inline-flex items-center gap-1">
+                              <Timer className="h-3.5 w-3.5" />
+                              {formatDuration(attempt.durationSeconds)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-gray-700">
+                          {attempt.score}/{attempt.totalQuestions}
+                        </span>
+                        {isExpanded ? (
+                          <ChevronUp className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <ChevronDown className="h-5 w-5 text-gray-400" />
                         )}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-semibold text-gray-700">
-                        {attempt.score}/{attempt.totalQuestions}
-                      </span>
-                      {isExpanded ? (
-                        <ChevronUp className="h-5 w-5 text-gray-400" />
-                      ) : (
-                        <ChevronDown className="h-5 w-5 text-gray-400" />
-                      )}
-                    </div>
-                  </button>
-                  {isExpanded && (
-                    <div className="bg-gray-50 border-t border-gray-200 px-4 py-4">
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3">
-                        Question performance
-                      </h4>
-                      {renderAttemptAnswers(attempt)}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                    </button>
+                    {isExpanded && (
+                      <div className="bg-gray-50 border-t border-gray-200 px-4 py-4">
+                        {/* Assessment Report */}
+                        {renderAssessmentReport(attempt)}
+
+                        <h4 className="text-sm font-semibold text-gray-700 mb-3 mt-6">
+                          Question performance
+                        </h4>
+                        {renderAttemptAnswers(attempt)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             /* Summary View */
@@ -914,10 +1929,11 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                   Best Performance Summary
                 </h3>
                 <p className="text-sm text-gray-600">
-                  Showing the best attempt for each participant, ranked by performance.
+                  Showing the best attempt for each participant, ranked by
+                  performance.
                 </p>
               </div>
-              
+
               {summarizedPerformance.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   No performance data available.
@@ -952,12 +1968,21 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {summarizedPerformance.map((user, index) => (
-                        <tr key={user.participantId} className={index < 3 ? "bg-yellow-50" : ""}>
+                        <tr
+                          key={user.participantId}
+                          className={index < 3 ? "bg-yellow-50" : ""}
+                        >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              {index === 0 && <Award className="h-5 w-5 text-yellow-500 mr-2" />}
-                              {index === 1 && <Award className="h-5 w-5 text-gray-400 mr-2" />}
-                              {index === 2 && <Award className="h-5 w-5 text-amber-600 mr-2" />}
+                              {index === 0 && (
+                                <Award className="h-5 w-5 text-yellow-500 mr-2" />
+                              )}
+                              {index === 1 && (
+                                <Award className="h-5 w-5 text-gray-400 mr-2" />
+                              )}
+                              {index === 2 && (
+                                <Award className="h-5 w-5 text-amber-600 mr-2" />
+                              )}
                               <span className="text-sm font-medium text-gray-900">
                                 #{index + 1}
                               </span>
@@ -975,18 +2000,26 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                             {user.score}/{user.totalQuestions}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              user.percentage >= 80 ? "bg-green-100 text-green-800" :
-                              user.percentage >= 60 ? "bg-yellow-100 text-yellow-800" :
-                              "bg-red-100 text-red-800"
-                            }`}>
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                user.percentage >= 80
+                                  ? "bg-green-100 text-green-800"
+                                  : user.percentage >= 60
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}
+                            >
                               {user.percentage}%
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              user.passed ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                            }`}>
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                user.passed
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}
+                            >
                               {user.passed ? "Pass" : "Fail"}
                             </span>
                           </td>
