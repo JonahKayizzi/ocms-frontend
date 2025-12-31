@@ -25,6 +25,9 @@ export default function QuestionForm({
   const [isMandatory, setIsMandatory] = useState(
     question?.isMandatory !== undefined ? question.isMandatory : true
   );
+  const [marks, setMarks] = useState(
+    question?.marks !== undefined ? question.marks : 1.0
+  );
   const [structuredTimeLimit, setStructuredTimeLimit] = useState(
     question?.structuredTimeLimit || 300 // Default 5 minutes
   );
@@ -80,6 +83,7 @@ export default function QuestionForm({
       setIsMandatory(
         question.isMandatory !== undefined ? question.isMandatory : true
       );
+      setMarks(question.marks !== undefined ? question.marks : 1.0);
       setStructuredTimeLimit(question.structuredTimeLimit || 300);
       // Find the correct option index from loaded options
       const correctOption = question.options?.find(
@@ -114,6 +118,7 @@ export default function QuestionForm({
       setText("");
       setQuestionType("multiple_choice");
       setIsMandatory(true);
+      setMarks(1.0);
       setStructuredTimeLimit(300);
       setCorrectOptionIndex(0);
       setOptionalAnswers(["", ""]);
@@ -352,6 +357,7 @@ export default function QuestionForm({
             imageDataUrl,
             questionType,
             isMandatory,
+            marks: marks || 1.0, // Ensure marks is always set
             structuredTimeLimit:
               questionType === "structured" &&
               assessmentTimingMode === "question"
@@ -370,6 +376,7 @@ export default function QuestionForm({
           imageDataUrl,
           questionType,
           isMandatory,
+          marks: marks || 1.0, // Ensure marks is always set
           structuredTimeLimit:
             questionType === "structured" && assessmentTimingMode === "question"
               ? structuredTimeLimit
@@ -952,6 +959,27 @@ export default function QuestionForm({
             {isMandatory
               ? "This question will always appear in the quiz"
               : "This question may be randomly selected to appear in the quiz"}
+          </p>
+        </div>
+
+        {/* Marks Allocation */}
+        <div className={formGroupClass}>
+          <span htmlFor="question-marks" className={labelClass}>
+            Marks Allocated
+          </span>
+          <input
+            id="question-marks"
+            type="number"
+            step="0.5"
+            min="0.5"
+            value={marks}
+            onChange={(e) => setMarks(Math.max(0.5, parseFloat(e.target.value) || 1.0))}
+            className={inputClass}
+          />
+          <p className="text-sm text-gray-500">
+            {isMandatory
+              ? "Mandatory questions can carry any mark value"
+              : "Optional questions in a quiz should always carry the same mark"}
           </p>
         </div>
 

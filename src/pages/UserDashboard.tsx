@@ -168,7 +168,7 @@ const UserDashboard: React.FC = () => {
 
   // Get available standalone assessments
   const { data: standaloneAssessments = [], isLoading: assessmentsLoading } =
-    useGetStandaloneAssessmentsQuery();
+    useGetStandaloneAssessmentsQuery(undefined);
 
   // myAttempts fetched above
 

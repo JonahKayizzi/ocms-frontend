@@ -622,7 +622,7 @@ export default function QuizAssessment() {
           </button>
         </div>
         <div className="max-w-4xl mx-auto p-4">
-          <ResultsHeader results={results} />
+          <ResultsHeader results={results} quizData={quizData} />
           {/* Only show QuestionSummary if showAnswers is enabled */}
           {assessment.showAnswers && (
             <QuestionSummary
