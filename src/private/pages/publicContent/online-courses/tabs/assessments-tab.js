@@ -644,20 +644,26 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     // Calculate report metrics (same as renderAssessmentReport)
     const totalQuestions = attempt.totalQuestions || answers.length || 0;
     const score = attempt.score || 0;
-    const percentage =
-      attempt.percentage ||
-      (totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0);
-    const passFail =
-      percentage >= (assessment.passingScore || 50) ? "Pass" : "Fail";
-
+    
+    // Use totalMarks from backend if available, otherwise calculate from answers
     let totalMarks = 0;
-    let maxMarks = 0;
+    let maxMarks = attempt.totalMarks || 0; // Use backend totalMarks if available
+    
     let negativeMarks = 0;
     let correctCount = 0;
     let partiallyCorrectCount = 0;
     let incorrectCount = 0;
     let unansweredCount = 0;
 
+    // If totalMarks is not set from backend, calculate from answers
+    if (!maxMarks || maxMarks === 0) {
+      answers.forEach((answer) => {
+        const questionMarks = answer.questionMarks || answer.maxMarks || 1.0;
+        maxMarks += questionMarks;
+      });
+    }
+
+    // Calculate total marks earned and counts
     answers.forEach((answer) => {
       const isStructured =
         answer.questionType === "structured" ||
@@ -668,26 +674,26 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       if (isStructured) {
         if (answer.awardedMarks !== null && answer.awardedMarks !== undefined) {
           totalMarks += answer.awardedMarks;
-          maxMarks += answer.maxMarks || 0;
           if (
             answer.awardedMarks > 0 &&
-            answer.awardedMarks < (answer.maxMarks || 0)
+            answer.awardedMarks < (answer.maxMarks || answer.questionMarks || 0)
           ) {
             partiallyCorrectCount++;
-          } else if (answer.awardedMarks >= (answer.maxMarks || 0)) {
+          } else if (answer.awardedMarks >= (answer.maxMarks || answer.questionMarks || 0)) {
             correctCount++;
           } else {
             incorrectCount++;
           }
         } else {
           unansweredCount++;
-          maxMarks += answer.maxMarks || 10;
         }
       } else {
         const isCorrect =
           answer.isCorrect ||
           (answer.selectedOptionId !== null &&
             answer.selectedOptionId === answer.correctOptionId);
+        
+        const questionMarks = answer.questionMarks || answer.maxMarks || 1.0;
 
         if (
           answer.selectedOptionId === null ||
@@ -696,15 +702,20 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           unansweredCount++;
         } else if (isCorrect) {
           correctCount++;
-          totalMarks += 1;
-          maxMarks += 1;
+          totalMarks += questionMarks; // Use actual question marks, not hardcoded 1
         } else {
           incorrectCount++;
-          maxMarks += 1;
           negativeMarks += 0.25;
         }
       }
     });
+
+    // Calculate percentage using total marks, not question count
+    const percentage =
+      attempt.percentage ||
+      (maxMarks > 0 ? Math.round((totalMarks / maxMarks) * 100) : 0);
+    const passFail =
+      percentage >= (assessment.passingScore || 50) ? "Pass" : "Fail";
 
     const timeTaken = attempt.durationSeconds
       ? formatDuration(attempt.durationSeconds)
@@ -876,15 +887,10 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     // Calculate report metrics
     const totalQuestions = attempt.totalQuestions || answers.length || 0;
     const score = attempt.score || 0;
-    const percentage =
-      attempt.percentage ||
-      (totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0);
-    const passFail =
-      percentage >= (assessment.passingScore || 50) ? "Pass" : "Fail";
-
-    // Calculate marks
+    
+    // Use totalMarks from backend if available, otherwise calculate from answers
     let totalMarks = 0;
-    let maxMarks = 0;
+    let maxMarks = attempt.totalMarks || 0; // Use backend totalMarks if available
     let negativeMarks = 0;
 
     // Count question types
@@ -893,6 +899,15 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     let incorrectCount = 0;
     let unansweredCount = 0;
 
+    // If totalMarks is not set from backend, calculate from answers
+    if (!maxMarks || maxMarks === 0) {
+      answers.forEach((answer) => {
+        const questionMarks = answer.questionMarks || answer.maxMarks || 1.0;
+        maxMarks += questionMarks;
+      });
+    }
+
+    // Calculate total marks earned and counts
     answers.forEach((answer) => {
       const isStructured =
         answer.questionType === "structured" ||
@@ -904,20 +919,18 @@ function AssessmentResultsPanel({ assessment, onClose }) {
         // For structured questions
         if (answer.awardedMarks !== null && answer.awardedMarks !== undefined) {
           totalMarks += answer.awardedMarks;
-          maxMarks += answer.maxMarks || 0;
           if (
             answer.awardedMarks > 0 &&
-            answer.awardedMarks < (answer.maxMarks || 0)
+            answer.awardedMarks < (answer.maxMarks || answer.questionMarks || 0)
           ) {
             partiallyCorrectCount++;
-          } else if (answer.awardedMarks >= (answer.maxMarks || 0)) {
+          } else if (answer.awardedMarks >= (answer.maxMarks || answer.questionMarks || 0)) {
             correctCount++;
           } else {
             incorrectCount++;
           }
         } else {
           unansweredCount++;
-          maxMarks += answer.maxMarks || 10; // Default max marks if not set
         }
       } else {
         // For multiple choice questions
@@ -925,6 +938,8 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           answer.isCorrect ||
           (answer.selectedOptionId !== null &&
             answer.selectedOptionId === answer.correctOptionId);
+        
+        const questionMarks = answer.questionMarks || answer.maxMarks || 1.0;
 
         if (
           answer.selectedOptionId === null ||
@@ -933,16 +948,21 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           unansweredCount++;
         } else if (isCorrect) {
           correctCount++;
-          totalMarks += 1; // Assuming 1 mark per correct answer
-          maxMarks += 1;
+          totalMarks += questionMarks; // Use actual question marks, not hardcoded 1
         } else {
           incorrectCount++;
-          maxMarks += 1;
           // Negative marking if applicable (assuming 0.25 negative marks per wrong answer)
           negativeMarks += 0.25;
         }
       }
     });
+
+    // Calculate percentage using total marks, not question count
+    const percentage =
+      attempt.percentage ||
+      (maxMarks > 0 ? Math.round((totalMarks / maxMarks) * 100) : 0);
+    const passFail =
+      percentage >= (assessment.passingScore || 50) ? "Pass" : "Fail";
 
     const timeTaken = attempt.durationSeconds
       ? formatDuration(attempt.durationSeconds)
@@ -1224,6 +1244,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
               selectedOptionText: selectedOptionText,
               structuredAnswer:
                 perf.structuredAnswer ||
+                perf.answerText ||
                 (detectedType === "structured"
                   ? perf.selectedAnswerText
                   : null),
@@ -1232,8 +1253,8 @@ function AssessmentResultsPanel({ assessment, onClose }) {
               correctAnswerText: correctOptionText,
               correctOptionText: correctOptionText,
               isCorrect: perf.correct,
-              awardedMarks: perf.awardedMarks,
-              maxMarks: perf.maxMarks,
+              awardedMarks: perf.awardedMarks || perf.markAwarded,
+              maxMarks: perf.maxMarks || perf.questionMarks,
               options: perf.options || [],
             };
           })
@@ -1408,11 +1429,11 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           const questionText = rawQuestionText;
 
           // Get selected answer - prioritize structuredAnswer for structured questions
-          // For structured questions, look for structuredAnswer, selectedAnswerText, or selectedAnswer (string)
+          // For structured questions, look for structuredAnswer, answerText, selectedAnswerText, or selectedAnswer (string)
           // For multiple choice, look for selectedOptionText, selectedAnswerText, or selectedAnswer (number/string)
           const selectedText = isStructured
             ? answer.structuredAnswer ||
-              answer.selectedAnswerText ||
+              answer.answerText ||
               answer.selectedAnswerText ||
               (typeof answer.selectedAnswer === "string" &&
               answer.selectedAnswer.trim() !== ""
@@ -1454,8 +1475,8 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           const marksKey = `${attempt.id}-${answer.questionId}`;
           const isEditingMarks = marksEditing[marksKey];
           const currentMarks = marksData[marksKey] || {
-            awarded: answer.awardedMarks || 0,
-            max: answer.maxMarks || 10,
+            awarded: answer.awardedMarks || answer.markAwarded || 0,
+            max: answer.maxMarks || answer.questionMarks || 10,
           };
 
           return (
@@ -1852,6 +1873,8 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                   "Unknown User";
                 const percent = Number.isFinite(attempt.percentage)
                   ? Math.round(attempt.percentage)
+                  : attempt.totalMarks && attempt.totalMarks > 0
+                  ? Math.round((attempt.score * 100) / attempt.totalMarks)
                   : attempt.totalQuestions
                   ? Math.round((attempt.score * 100) / attempt.totalQuestions)
                   : 0;

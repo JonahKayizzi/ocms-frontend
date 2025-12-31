@@ -31,7 +31,7 @@ const HomePage: React.FC = () => {
   const { data: completedCourses = [], isLoading: completedLoading } =
     useGetCompletedCoursesQuery();
   const { data: standaloneAssessments = [], isLoading: assessmentsLoading } =
-    useGetStandaloneAssessmentsQuery();
+    useGetStandaloneAssessmentsQuery(undefined);
 
   // Get enrollment counts for courses (for display) - using a component approach
   const EnrollmentCount: React.FC<{ courseId: number }> = ({ courseId }) => {
