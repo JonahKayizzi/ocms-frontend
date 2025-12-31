@@ -1019,7 +1019,7 @@ export default function QuestionForm({
         </div>
 
         {/* Only show options for multiple choice questions */}
-        {questionType === "multiple_choice" && (
+        {(questionType === "MCQ" || questionType === "multiple_choice") && (
           <>
             <div className={formGroupClass}>
               <span htmlFor="correct-answer" className={labelClass}>
