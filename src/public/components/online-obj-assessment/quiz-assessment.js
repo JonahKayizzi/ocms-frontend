@@ -285,14 +285,8 @@ export default function QuizAssessment() {
           }).unwrap();
         }
         await finishAttempt({ attemptId }).unwrap();
-        // After finishing, if max attempts reached, redirect to dashboard
-        const attemptsForThis = Array.isArray(userAttempts)
-          ? userAttempts.filter((a) => a?.quiz?.id === assessmentId).length
-          : 0;
-        const maxRetries = assessment?.maxRetries || 0;
-        if (maxRetries > 0 && attemptsForThis + 1 >= maxRetries) {
-          navigate("/dashboard");
-        }
+        // Note: We no longer auto-redirect on last attempt - users should be able to view their results
+        // They can navigate away manually when ready
       } catch (err) {
         // ignore persistence errors; UI already shows results
       }
@@ -540,6 +534,7 @@ export default function QuizAssessment() {
                   </li>
                 )}
                 <li>• Once you submit, you cannot change your answers</li>
+                <li>• Do not refresh the page while attempting the assessment</li>
                 {assessment.maxRetries > 1 && (
                   <li>
                     • You have {assessment.maxRetries} attempts to complete this
@@ -631,18 +626,43 @@ export default function QuizAssessment() {
               onResetQuiz={resetQuiz}
             />
           )}
-          {/* Show retry option if maxRetries allows it */}
-          {assessment.maxRetries > 1 && (
-            <div className="mt-6 text-center">
-              <button
-                type="button"
-                onClick={resetQuiz}
-                className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-              >
-                Retake Quiz
-              </button>
-            </div>
-          )}
+          {/* Show retry option if maxRetries allows it and user has attempts remaining */}
+          {(() => {
+            const attemptsForThis = Array.isArray(userAttempts)
+              ? userAttempts.filter((a) => a?.quiz?.id === assessmentId).length
+              : 0;
+            const maxRetries = assessment?.maxRetries || 0;
+            const attemptsLeft = maxRetries > 0 ? Math.max(maxRetries - attemptsForThis - 1, 0) : 999;
+            const isLastAttempt = maxRetries > 0 && attemptsLeft === 0;
+            
+            if (isLastAttempt) {
+              return (
+                <div className="mt-6 text-center">
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-400 dark:border-amber-600 p-4 rounded-md mb-4">
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      <strong>Maximum attempts reached.</strong> This was your final attempt. You can view your results above.
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+            
+            if (assessment.maxRetries > 1 && attemptsLeft > 0) {
+              return (
+                <div className="mt-6 text-center">
+                  <button
+                    type="button"
+                    onClick={resetQuiz}
+                    className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                  >
+                    Retake Quiz ({attemptsLeft} {attemptsLeft === 1 ? 'attempt' : 'attempts'} remaining)
+                  </button>
+                </div>
+              );
+            }
+            
+            return null;
+          })()}
         </div>
       </div>
     );

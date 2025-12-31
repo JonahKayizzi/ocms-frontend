@@ -79,6 +79,8 @@ export default function AssessmentForm({
           optionsToPresent: q.optionsToPresent || 4,
           imageDataUrl: q.imageDataUrl || "",
           optionalAnswers: [], // Options will be loaded when editing individual questions
+          questionType: q.questionType || "multiple_choice",
+          isMandatory: q.isMandatory !== undefined ? q.isMandatory : false,
         }));
         setQuestionBank(formattedQuestions);
       } else if (
@@ -354,7 +356,7 @@ export default function AssessmentForm({
           <div className="space-y-6">
             <div className={formGroupClass}>
               <span htmlFor="questions-to-present" className={labelClass}>
-                Number of Questions to Present to User
+                Number of Objective Questions to Present to User
               </span>
               <input
                 id="questions-to-present"
@@ -374,10 +376,29 @@ export default function AssessmentForm({
                 className={inputClass}
               />
               <p className="text-sm text-gray-500">
-                Enter how many questions will be randomly selected from the bank
-                for each user attempt. Max: {questionBank.length}
+                Enter how many objective (multiple choice) questions will be randomly selected from the bank
+                for each user attempt. Mandatory structured questions are always included separately. Max: {questionBank.length}
               </p>
             </div>
+
+            {/* Display count of mandatory structured questions */}
+            {(() => {
+              const mandatoryStructuredCount = existingQuestions.filter(
+                (q) => q.questionType === "structured" && q.isMandatory === true
+              ).length;
+              
+              if (mandatoryStructuredCount > 0) {
+                return (
+                  <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-md">
+                    <p className="text-sm text-blue-800">
+                      <strong>Mandatory Structured Questions:</strong> {mandatoryStructuredCount}
+                      {mandatoryStructuredCount === 1 ? " question" : " questions"} will always be included in this assessment.
+                    </p>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             <div className={formGroupClass}>
               <span htmlFor="max-retries" className={labelClass}>

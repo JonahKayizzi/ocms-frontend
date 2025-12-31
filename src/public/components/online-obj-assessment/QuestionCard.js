@@ -30,9 +30,10 @@ export default function QuestionCard({
   showPrevious,
   questionType, // 'multiple_choice' or 'structured'
 }) {
-  // Fallback: detect structured question if no options available
+  // Detect question type: prioritize prop, then check questionType field, then fallback to options
   const detectedQuestionType =
     questionType ||
+    question.questionType ||
     (question.options && question.options.length > 0
       ? "multiple_choice"
       : "structured");

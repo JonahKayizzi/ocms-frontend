@@ -126,7 +126,7 @@ export default function AssessmentsTab({
   if (loading) {
     rowsContent = (
       <tr>
-        <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+        <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
           Loading assessments...
         </td>
       </tr>
@@ -134,7 +134,7 @@ export default function AssessmentsTab({
   } else if (error) {
     rowsContent = (
       <tr>
-        <td colSpan="5" className="px-6 py-4 text-center text-red-600">
+        <td colSpan="6" className="px-6 py-4 text-center text-red-600">
           Failed to load assessments.
         </td>
       </tr>
@@ -142,7 +142,7 @@ export default function AssessmentsTab({
   } else if (apiAssessments.length === 0) {
     rowsContent = (
       <tr>
-        <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+        <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
           {selectedCourse
             ? "No assessments for this course yet."
             : "No standalone assessments yet."}
@@ -153,9 +153,10 @@ export default function AssessmentsTab({
     rowsContent = apiAssessments.map((assessment) => (
       <tr key={assessment.id} className="odd:bg-white even:bg-gray-50">
         <td className={`${tableCellClass} font-medium`}>{assessment.name}</td>
-        <td className={tableCellClass}>{assessment.description}</td>
+        <td className="px-6 py-4 text-sm text-gray-900 max-w-xs break-words whitespace-normal">{assessment.description || "—"}</td>
         <td className={tableCellClass}>{assessment.questionCount}</td>
-        <td className={tableCellClass}>{assessment.questionsToPresent}</td>
+        <td className={tableCellClass}>{assessment.questionsToPresent || 0}</td>
+        <td className={tableCellClass}>{assessment.mandatoryStructuredCount || 0}</td>
         <td className={`${tableCellClass} text-right`}>
           <button
             type="button"
@@ -221,21 +222,24 @@ export default function AssessmentsTab({
         </div>
         <div>
           {/* Table for assessments */}
-          <div className="overflow-x-auto">
-            <table className={tableClass}>
+          <div className="overflow-x-auto max-w-full">
+            <table className={`${tableClass} w-full table-auto`}>
               <thead className={tableHeaderClass}>
                 <tr>
                   <th scope="col" className={tableHeadClass}>
                     Name
                   </th>
-                  <th scope="col" className={tableHeadClass}>
+                  <th scope="col" className={`${tableHeadClass} max-w-xs`}>
                     Description
                   </th>
                   <th scope="col" className={tableHeadClass}>
                     Total Questions
                   </th>
                   <th scope="col" className={tableHeadClass}>
-                    Questions to Present
+                    Objective Questions
+                  </th>
+                  <th scope="col" className={tableHeadClass}>
+                    Structured Questions
                   </th>
                   <th scope="col" className={`${tableHeadClass} text-right`}>
                     Actions
@@ -1792,6 +1796,16 @@ function AssessmentResultsPanel({ assessment, onClose }) {
             <div
               key={card.label}
               className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center justify-between"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              role="presentation"
+              style={{ cursor: 'default', pointerEvents: 'auto' }}
             >
               <div>
                 <p className="text-xs uppercase tracking-wide text-gray-500">
