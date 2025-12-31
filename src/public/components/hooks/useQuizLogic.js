@@ -29,7 +29,6 @@ export default function useQuizLogic(quizData, timingSettings = null) {
         setTotalTime(quizTimeInSeconds);
       } else if (timingSettings.timingMode === "question") {
         // Set default timer for questions (in seconds)
-        // Individual questions may override this with structuredTimeLimit
         setTotalTime(timingSettings.timeLimit);
       }
     } else {
@@ -102,9 +101,8 @@ export default function useQuizLogic(quizData, timingSettings = null) {
     // Reset isTimeUp flag when moving to new question
     setIsTimeUp(false);
 
-    // Get time limit for current question (use structuredTimeLimit if available, otherwise use default)
-    const currentQ = quizData[currentQuestion];
-    const questionTimeLimit = currentQ?.structuredTimeLimit || totalTime;
+    // Get time limit for current question (use default from timing settings)
+    const questionTimeLimit = totalTime;
 
     // Set timeRemaining for current question
     setTimeRemaining(questionTimeLimit);
@@ -183,7 +181,7 @@ export default function useQuizLogic(quizData, timingSettings = null) {
       return {
         questionId: question.id,
         question: question.question,
-        questionType: question.questionType || "multiple_choice",
+        questionType: question.questionType || "MCQ",
         selectedAnswerIndex: typeof userAnswer === "number" ? userAnswer : null,
         selectedAnswerText: isStructured
           ? typeof userAnswer === "string"
@@ -303,7 +301,7 @@ export default function useQuizLogic(quizData, timingSettings = null) {
       console.log(`=== ANSWER STORED FOR QUESTION ${currentQuestion + 1} ===`);
       console.log(`Question ID: ${currentQ.id}`);
       console.log(
-        `Question Type: ${currentQ.questionType || "multiple_choice"}`
+        `Question Type: ${currentQ.questionType || "MCQ"}`
       );
       if (isStructured) {
         console.log(

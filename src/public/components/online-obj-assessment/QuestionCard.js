@@ -28,14 +28,14 @@ export default function QuestionCard({
   onPrevious,
   isLastQuestion,
   showPrevious,
-  questionType, // 'multiple_choice' or 'structured'
+  questionType, // 'MCQ' or 'structured'
 }) {
   // Detect question type: prioritize prop, then check questionType field, then fallback to options
   const detectedQuestionType =
     questionType ||
     question.questionType ||
     (question.options && question.options.length > 0
-      ? "multiple_choice"
+      ? "MCQ"
       : "structured");
   const isStructured = detectedQuestionType === "structured";
 
@@ -217,5 +217,5 @@ QuestionCard.defaultProps = {
   selectedAnswer: null,
   onPrevious: undefined,
   showPrevious: false,
-  questionType: "multiple_choice",
+        questionType: "MCQ",
 };

@@ -1216,7 +1216,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                 ? "structured"
                 : !hasOptions && !hasSelectedOption
                 ? "structured"
-                : "multiple_choice");
+                : "MCQ");
 
             // Extract selected answer text - check multiple sources for better coverage
             const selectedOptionText =
@@ -1282,7 +1282,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                 ? "structured"
                 : !hasOptions && !hasSelectedOption
                 ? "structured"
-                : "multiple_choice");
+                : "MCQ");
 
             // Extract answer text for legacy format
             const selectedOptionText =

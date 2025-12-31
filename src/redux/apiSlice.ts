@@ -339,10 +339,17 @@ export const apiSlice = createApi({
       AssessmentQuestion[],
       { assessmentId: number; questionsToPresent?: number }
     >({
-      query: ({ assessmentId, questionsToPresent }) => ({
-        url: `/assessment-questions/assessment/${assessmentId}/random`,
-        params: questionsToPresent ? { questionsToPresent } : {},
-      }),
+      query: ({ assessmentId, questionsToPresent }) => {
+        const params: Record<string, string> = {};
+        // Always pass questionsToPresent if it's a valid number
+        if (questionsToPresent != null && questionsToPresent > 0) {
+          params.questionsToPresent = String(questionsToPresent);
+        }
+        return {
+          url: `/assessment-questions/assessment/${assessmentId}/random`,
+          params: Object.keys(params).length > 0 ? params : undefined,
+        };
+      },
       providesTags: (result, error, { assessmentId }) => [
         { type: "AssessmentQuestion", assessmentId },
       ],

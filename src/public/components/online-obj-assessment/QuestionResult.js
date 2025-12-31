@@ -141,7 +141,6 @@ QuestionResult.propTypes = {
     questionType: PropTypes.string, // 'multiple_choice' or 'structured'
     options: PropTypes.arrayOf(PropTypes.string),
     correctAnswer: PropTypes.number,
-    structuredTimeLimit: PropTypes.number,
   }).isRequired,
   questionNumber: PropTypes.number.isRequired,
   userAnswer: PropTypes.shape({

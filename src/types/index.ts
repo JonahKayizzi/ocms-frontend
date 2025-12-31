@@ -40,7 +40,7 @@ export interface QuizAttemptAnswer {
   question?: {
     id: number;
     text: string;
-    questionType?: "multiple_choice" | "structured";
+    questionType?: "MCQ" | "structured";
   };
   questionType?: "multiple_choice" | "structured"; // Question type
   selectedOptionId?: number | null;
@@ -134,7 +134,6 @@ export interface AssessmentQuestion {
   assessmentId: number;
   questionType?: "multiple_choice" | "structured"; // New field for question type
   isMandatory?: boolean; // New field: true = mandatory, false = optional (can be randomly selected)
-  structuredTimeLimit?: number; // Time limit in seconds for structured questions (when timingMode is "question")
   createdAt: string;
   updatedAt: string;
 }
@@ -214,7 +213,6 @@ export interface QuestionFormData {
   assessmentId: number;
   questionType?: "multiple_choice" | "structured";
   isMandatory?: boolean;
-  structuredTimeLimit?: number;
 }
 
 // Status constants

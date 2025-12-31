@@ -16,20 +16,17 @@ export default function QuestionForm({
   onSave,
   onCancel,
   assessmentId,
-  assessmentTimingMode, // Pass timing mode from parent to show structuredTimeLimit field
+  assessmentTimingMode, // Pass timing mode from parent (not used for structuredTimeLimit anymore)
 }) {
   const [text, setText] = useState(question?.text || "");
   const [questionType, setQuestionType] = useState(
-    question?.questionType || "multiple_choice"
+    question?.questionType || "MCQ"
   );
   const [isMandatory, setIsMandatory] = useState(
     question?.isMandatory !== undefined ? question.isMandatory : true
   );
   const [marks, setMarks] = useState(
     question?.marks !== undefined ? question.marks : 1.0
-  );
-  const [structuredTimeLimit, setStructuredTimeLimit] = useState(
-    question?.structuredTimeLimit || 300 // Default 5 minutes
   );
   const [correctOptionIndex, setCorrectOptionIndex] = useState(0);
   const [optionalAnswers, setOptionalAnswers] = useState(
@@ -79,12 +76,11 @@ export default function QuestionForm({
   useEffect(() => {
     if (question) {
       setText(question.text);
-      setQuestionType(question.questionType || "multiple_choice");
+      setQuestionType(question.questionType || "MCQ");
       setIsMandatory(
         question.isMandatory !== undefined ? question.isMandatory : true
       );
       setMarks(question.marks !== undefined ? question.marks : 1.0);
-      setStructuredTimeLimit(question.structuredTimeLimit || 300);
       // Find the correct option index from loaded options
       const correctOption = question.options?.find(
         (opt) => opt.isCorrect === true
@@ -116,10 +112,9 @@ export default function QuestionForm({
       setQuestionSaved(true); // Existing question is already saved
     } else {
       setText("");
-      setQuestionType("multiple_choice");
+      setQuestionType("MCQ");
       setIsMandatory(true);
       setMarks(1.0);
-      setStructuredTimeLimit(300);
       setCorrectOptionIndex(0);
       setOptionalAnswers(["", ""]);
       setOptionsToPresent(2);
@@ -358,11 +353,6 @@ export default function QuestionForm({
             questionType,
             isMandatory,
             marks: marks || 1.0, // Ensure marks is always set
-            structuredTimeLimit:
-              questionType === "structured" &&
-              assessmentTimingMode === "question"
-                ? structuredTimeLimit
-                : undefined,
           },
         }).unwrap();
 
@@ -377,10 +367,6 @@ export default function QuestionForm({
           questionType,
           isMandatory,
           marks: marks || 1.0, // Ensure marks is always set
-          structuredTimeLimit:
-            questionType === "structured" && assessmentTimingMode === "question"
-              ? structuredTimeLimit
-              : undefined,
           assessment: { id: assessmentId },
         }).unwrap();
 
@@ -429,7 +415,7 @@ export default function QuestionForm({
       );
       // Only require options for multiple choice questions
       if (
-        questionType === "multiple_choice" &&
+        (questionType === "MCQ" || questionType === "mcq") &&
         filteredOptionalAnswers.length < 2
       ) {
         setError(
@@ -604,7 +590,7 @@ export default function QuestionForm({
       );
       // Only require options for multiple choice questions
       if (
-        questionType === "multiple_choice" &&
+        (questionType === "MCQ" || questionType === "mcq") &&
         filteredOptionalAnswers.length < 2
       ) {
         setError(
@@ -641,11 +627,6 @@ export default function QuestionForm({
             imageDataUrl,
             questionType,
             isMandatory,
-            structuredTimeLimit:
-              questionType === "structured" &&
-              assessmentTimingMode === "question"
-                ? structuredTimeLimit
-                : undefined,
           },
         }).unwrap();
 
@@ -753,10 +734,6 @@ export default function QuestionForm({
           imageDataUrl,
           questionType,
           isMandatory,
-          structuredTimeLimit:
-            questionType === "structured" && assessmentTimingMode === "question"
-              ? structuredTimeLimit
-              : undefined,
           assessment: { id: assessmentId },
         }).unwrap();
 
@@ -931,7 +908,7 @@ export default function QuestionForm({
             onChange={(e) => setQuestionType(e.target.value)}
             className={inputClass}
           >
-            <option value="multiple_choice">Multiple Choice</option>
+            <option value="MCQ">Multiple Choice</option>
             <option value="structured">Structured (Text/Paragraph)</option>
           </select>
           <p className="text-sm text-gray-500">
@@ -982,33 +959,6 @@ export default function QuestionForm({
               : "Optional questions in a quiz should always carry the same mark"}
           </p>
         </div>
-
-        {/* Structured Time Limit (only shown for structured questions when timing mode is per-question) */}
-        {questionType === "structured" &&
-          assessmentTimingMode === "question" && (
-            <div className={formGroupClass}>
-              <span htmlFor="structured-time-limit" className={labelClass}>
-                Time Limit for This Question (seconds)
-              </span>
-              <input
-                id="structured-time-limit"
-                type="number"
-                value={structuredTimeLimit}
-                onChange={(e) =>
-                  setStructuredTimeLimit(
-                    Math.max(30, parseInt(e.target.value) || 300)
-                  )
-                }
-                min="30"
-                placeholder="300"
-                className={inputClass}
-              />
-              <p className="text-sm text-gray-500">
-                Time limit in seconds for this structured question (minimum 30
-                seconds)
-              </p>
-            </div>
-          )}
 
         <div className={formGroupClass}>
           <span htmlFor="question-text" className={labelClass}>
@@ -1208,7 +1158,6 @@ QuestionForm.propTypes = {
     imageDataUrl: PropTypes.string,
     questionType: PropTypes.string,
     isMandatory: PropTypes.bool,
-    structuredTimeLimit: PropTypes.number,
   }),
   onSave: PropTypes.func.isRequired,
   onCancel: PropTypes.func.isRequired,

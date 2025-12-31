@@ -79,7 +79,7 @@ export default function AssessmentForm({
           optionsToPresent: q.optionsToPresent || 4,
           imageDataUrl: q.imageDataUrl || "",
           optionalAnswers: [], // Options will be loaded when editing individual questions
-          questionType: q.questionType || "multiple_choice",
+          questionType: q.questionType || "MCQ",
           isMandatory: q.isMandatory !== undefined ? q.isMandatory : false,
         }));
         setQuestionBank(formattedQuestions);

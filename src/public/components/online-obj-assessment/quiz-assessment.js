@@ -161,7 +161,7 @@ export default function QuizAssessment() {
         Array.isArray(question.options) && question.options.length > 0;
       const questionType =
         question.questionType ||
-        (hasOptions ? "multiple_choice" : "structured");
+        (hasOptions ? "MCQ" : "structured");
 
       // For structured questions, return simpler format
       if (questionType === "structured") {
@@ -172,7 +172,6 @@ export default function QuizAssessment() {
           correctAnswer: null, // No correct answer for structured (needs manual grading)
           imageDataUrl: question.imageDataUrl || "",
           questionType: "structured",
-          structuredTimeLimit: question.structuredTimeLimit,
         };
       }
 
@@ -225,8 +224,7 @@ export default function QuizAssessment() {
         options: finalOptions,
         correctAnswer: correctIndex >= 0 ? correctIndex : 0,
         imageDataUrl: question.imageDataUrl || "",
-        questionType: "multiple_choice",
-        structuredTimeLimit: undefined,
+        questionType: "MCQ",
       };
     });
   }, [questions]); // Only recalculate when questions change
@@ -303,9 +301,9 @@ export default function QuizAssessment() {
 
   // Start quiz timer when user clicks "Start Quiz"
   const handleStartQuiz = async () => {
-    // Local guard using attempts left
+    // Local guard using attempts left - count only COMPLETED attempts
     const attemptsForThis = Array.isArray(userAttempts)
-      ? userAttempts.filter((a) => a?.quiz?.id === assessmentId).length
+      ? userAttempts.filter((a) => a?.quiz?.id === assessmentId && a?.completedAt).length
       : 0;
     const maxRetries = assessment?.maxRetries || 0;
     if (maxRetries > 0 && attemptsForThis >= maxRetries) {
@@ -376,9 +374,12 @@ export default function QuizAssessment() {
 
   // Show introduction screen
   if (showIntroduction) {
+    // Count only COMPLETED attempts for this assessment (attempts with completedAt)
     const attemptsForThis = Array.isArray(userAttempts)
-      ? userAttempts.filter((a) => a?.quiz?.id === assessmentId).length
+      ? userAttempts.filter((a) => a?.quiz?.id === assessmentId && a?.completedAt).length
       : 0;
+    // Calculate attempts remaining: maxRetries - completed attempts
+    // (This is before starting, so we don't subtract 1)
     const attemptsLeft =
       assessment?.maxRetries > 0
         ? Math.max((assessment?.maxRetries || 0) - attemptsForThis, 0)
@@ -419,12 +420,39 @@ export default function QuizAssessment() {
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-300">
-                      Questions to Attempt:
+                      Total Questions:
                     </span>
                     <span className="font-medium dark:text-white">
-                      {assessment.questionsToPresent}
+                      {totalQuestions || assessment.questionsToPresent || 0}
                     </span>
                   </div>
+                  {/* Show MCQ and Structured question counts */}
+                  {(() => {
+                    const mcqCount = quizData.filter(q => q.questionType === "MCQ" || (q.options && q.options.length > 0)).length;
+                    const structuredCount = quizData.filter(q => q.questionType === "structured" || (!q.options || q.options.length === 0)).length;
+                    return (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-300">
+                            Multiple Choice Questions:
+                          </span>
+                          <span className="font-medium dark:text-white">
+                            {mcqCount}
+                          </span>
+                        </div>
+                        {structuredCount > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-300">
+                              Structured Questions:
+                            </span>
+                            <span className="font-medium dark:text-white">
+                              {structuredCount}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   <div className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-300">
                       Maximum Retries:
@@ -577,9 +605,16 @@ export default function QuizAssessment() {
     );
   }
 
-  // Show retry warning if maxRetries is set and user has attempts remaining
-  const showRetryWarning = assessment.maxRetries > 1;
-  const remainingAttempts = assessment.maxRetries - 1; // Assuming this is the first attempt
+  // Calculate attempts remaining for retry warning (during quiz)
+  // Count only COMPLETED attempts for this assessment (attempts with completedAt)
+  const attemptsForThisQuiz = Array.isArray(userAttempts)
+    ? userAttempts.filter((a) => a?.quiz?.id === assessmentId && a?.completedAt).length
+    : 0;
+  // Calculate remaining: maxRetries - completed attempts - 1 (for current attempt)
+  const remainingAttempts = assessment?.maxRetries > 0
+    ? Math.max((assessment?.maxRetries || 0) - attemptsForThisQuiz - 1, 0)
+    : null;
+  const showRetryWarning = assessment?.maxRetries > 1 && remainingAttempts !== null && remainingAttempts > 0;
 
   // Show time warning when 10% of time is left
   const showTimeWarning = () => {
@@ -628,8 +663,9 @@ export default function QuizAssessment() {
           )}
           {/* Show retry option if maxRetries allows it and user has attempts remaining */}
           {(() => {
+            // Count only COMPLETED attempts for this assessment (attempts with completedAt)
             const attemptsForThis = Array.isArray(userAttempts)
-              ? userAttempts.filter((a) => a?.quiz?.id === assessmentId).length
+              ? userAttempts.filter((a) => a?.quiz?.id === assessmentId && a?.completedAt).length
               : 0;
             const maxRetries = assessment?.maxRetries || 0;
             const attemptsLeft = maxRetries > 0 ? Math.max(maxRetries - attemptsForThis - 1, 0) : 999;
@@ -731,11 +767,8 @@ export default function QuizAssessment() {
               formatTime={formatTime}
               isTimeUp={isTimeUp}
               totalTime={
-                // For per-question mode, use the current question's time limit if available
-                timingMode === "question" &&
-                quizData[currentQuestion]?.structuredTimeLimit
-                  ? quizData[currentQuestion].structuredTimeLimit
-                  : totalTime
+                // For per-question mode, use the default time limit
+                totalTime
               }
             />
           </div>
@@ -756,7 +789,7 @@ export default function QuizAssessment() {
             questionType={
               quizData[currentQuestion]?.questionType ||
               (quizData[currentQuestion]?.options?.length > 0
-                ? "multiple_choice"
+                ? "MCQ"
                 : "structured")
             }
           />
