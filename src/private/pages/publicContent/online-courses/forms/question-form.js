@@ -352,7 +352,7 @@ export default function QuestionForm({
             imageDataUrl,
             questionType,
             isMandatory,
-            marks: marks || 1.0, // Ensure marks is always set
+            marks: marks !== undefined && marks !== null ? marks : 1.0, // Ensure marks is always set (allow 0)
           },
         }).unwrap();
 
@@ -627,6 +627,7 @@ export default function QuestionForm({
             imageDataUrl,
             questionType,
             isMandatory,
+            marks: marks !== undefined && marks !== null ? marks : 1.0, // Ensure marks is always set (allow 0)
           },
         }).unwrap();
 

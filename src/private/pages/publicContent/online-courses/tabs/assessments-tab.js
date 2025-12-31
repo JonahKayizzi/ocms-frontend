@@ -350,6 +350,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           bestAttempt: attempt,
           percentage: percentage,
           score: attempt.score,
+          totalMarks: attempt.totalMarks || attempt.totalQuestions, // Use totalMarks if available, fallback to totalQuestions
           totalQuestions: attempt.totalQuestions,
           passed: attempt.passed,
           completedAt: attempt.completedAt,
@@ -412,7 +413,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     const summaryTableData = summarizedPerformance.map((user, index) => [
       (index + 1).toString(),
       user.participantId,
-      `${user.score}/${user.totalQuestions}`,
+      `${Math.round(user.score * 100) / 100}/${user.totalMarks ? Math.round(user.totalMarks * 100) / 100 : user.totalQuestions}`,
       `${user.percentage}%`,
       user.passed ? "Pass" : "Fail",
       user.totalAttempts.toString(),
@@ -477,7 +478,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       "Rank",
       "Participant ID",
       "Score",
-      "Total Questions",
+      "Total Marks",
       "Percentage",
       "Status",
       "Total Attempts",
@@ -486,8 +487,8 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     const summaryData = summarizedPerformance.map((user, index) => [
       index + 1,
       user.participantId,
-      user.score,
-      user.totalQuestions,
+      Math.round(user.score * 100) / 100,
+      user.totalMarks ? Math.round(user.totalMarks * 100) / 100 : user.totalQuestions,
       `${user.percentage}%`,
       user.passed ? "Pass" : "Fail",
       user.totalAttempts,
@@ -1371,8 +1372,9 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           return newState;
         });
 
-        // Refresh attempt details
+        // Refresh attempt details and main attempts list to update scores
         fetchAttemptDetails(attemptId);
+        refetch(); // Refresh the main attempts list to update score/totalMarks display
       } catch (error) {
         console.error("Error awarding marks:", error);
         alert("Failed to save marks. Please try again.");
@@ -1937,7 +1939,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-semibold text-gray-700">
-                          {attempt.score}/{attempt.totalQuestions}
+                          {Math.round(attempt.score * 100) / 100}/{attempt.totalMarks ? Math.round(attempt.totalMarks * 100) / 100 : attempt.totalQuestions}
                         </span>
                         {isExpanded ? (
                           <ChevronUp className="h-5 w-5 text-gray-400" />
@@ -2037,7 +2039,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {user.score}/{user.totalQuestions}
+                            {Math.round(user.score * 100) / 100}/{user.totalMarks ? Math.round(user.totalMarks * 100) / 100 : user.totalQuestions}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span
