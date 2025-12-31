@@ -91,7 +91,7 @@ export default function CourseManagementDashboard() {
   // Non-course assessment categories
   const [assessmentCategory, setAssessmentCategory] = useState(''); // e.g., 'OJT', 'Proficiency'
 
-  // Check authentication on mount
+  // Check authentication and admin access on mount
   useEffect(() => {
     const token = getToken();
     if (!token || isTokenExpired(token)) {
@@ -102,6 +102,12 @@ export default function CourseManagementDashboard() {
     const userInfo = getUserInfo(token);
     if (userInfo) {
       setCurrentUser(userInfo);
+      
+      // Check if user is admin - redirect non-admin users to dashboard
+      if (!userInfo.isAdmin) {
+        navigate('/dashboard', { state: { warning: 'Access denied. Admin privileges required.' } });
+        return;
+      }
     } else {
       navigate('/login', { state: { warning: 'Invalid session. Please login again.' } });
     }

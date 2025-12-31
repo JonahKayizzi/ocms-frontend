@@ -50,9 +50,23 @@ export default function LoginPage() {
                     token = data.token || data.accessToken || data.jwt;
                     isAdmin = data.isAdmin === true || data.userType === 'admin';
                     userType = data.userType;
+                } else {
+                    // Handle wrong password or other authentication errors
+                    if (resp.status === 401 || resp.status === 403) {
+                        setError('Incorrect username or password');
+                        setLoading(false);
+                        return;
+                    } else {
+                        setError('Login failed. Please try again.');
+                        setLoading(false);
+                        return;
+                    }
                 }
             } catch (fetchErr) {
-                // Network failure falls back to demo flow below
+                // Network failure
+                setError('Network error. Please check your connection and try again.');
+                setLoading(false);
+                return;
             }
 
             if (token) {
