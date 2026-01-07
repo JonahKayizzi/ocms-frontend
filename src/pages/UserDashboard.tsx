@@ -30,6 +30,7 @@ import {
   removeToken,
   getUsernameFromToken,
 } from "../utils/jwtUtils";
+import LogoutConfirmationModal from "../components/LogoutConfirmationModal";
 
 const UserDashboard: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
@@ -38,6 +39,7 @@ const UserDashboard: React.FC = () => {
   const userInfo = token ? getUserInfo(token) : null;
   const username = token ? getUsernameFromToken(token) : null;
   const userDepartment = userInfo?.category || "General"; // Assuming category contains department
+  const [showLogoutModal, setShowLogoutModal] = React.useState(false);
 
   // Get user's courses (filtered by department on backend if supported)
   const { data: allPublishedCourses = [], isLoading: coursesLoading } =
@@ -173,8 +175,17 @@ const UserDashboard: React.FC = () => {
   // myAttempts fetched above
 
   const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
     removeToken();
     navigate("/");
+    setShowLogoutModal(false);
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   const formatDate = (dateString: string) => {
@@ -759,6 +770,11 @@ const UserDashboard: React.FC = () => {
           ) : null}
         </section>
       </main>
+      <LogoutConfirmationModal
+        isOpen={showLogoutModal}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
     </div>
   );
 };
