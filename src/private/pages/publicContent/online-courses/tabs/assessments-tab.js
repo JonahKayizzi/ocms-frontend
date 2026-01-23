@@ -59,7 +59,7 @@ export default function AssessmentsTab({
     isLoading: standaloneAssessmentsLoading,
     isError: standaloneAssessmentsError,
   } = useGetStandaloneAssessmentsQuery(
-    standaloneCategory || filterCategory || undefined, 
+    standaloneCategory || filterCategory || undefined,
     { skip: !!courseId }
   );
 
@@ -153,10 +153,14 @@ export default function AssessmentsTab({
     rowsContent = apiAssessments.map((assessment) => (
       <tr key={assessment.id} className="odd:bg-white even:bg-gray-50">
         <td className={`${tableCellClass} font-medium`}>{assessment.name}</td>
-        <td className="px-6 py-4 text-sm text-gray-900 max-w-xs break-words whitespace-normal">{assessment.description || "—"}</td>
+        <td className="px-6 py-4 text-sm text-gray-900 max-w-xs break-words whitespace-normal">
+          {assessment.description || "—"}
+        </td>
         <td className={tableCellClass}>{assessment.questionCount}</td>
         <td className={tableCellClass}>{assessment.questionsToPresent || 0}</td>
-        <td className={tableCellClass}>{assessment.mandatoryStructuredCount || 0}</td>
+        <td className={tableCellClass}>
+          {assessment.mandatoryStructuredCount || 0}
+        </td>
         <td className={`${tableCellClass} text-right`}>
           <button
             type="button"
@@ -352,7 +356,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           score: attempt.score,
           totalMarks: attempt.totalMarks || attempt.totalQuestions, // Use totalMarks if available, fallback to totalQuestions
           totalQuestions: attempt.totalQuestions,
-          passed: attempt.passed,
+          passed: percentage >= 70, // Match report pass/fail threshold (70%)
           completedAt: attempt.completedAt,
           attemptNumber: attempt.attemptNumber,
           totalAttempts: attemptList.filter((a) => a.participantId === userId)
@@ -413,7 +417,11 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     const summaryTableData = summarizedPerformance.map((user, index) => [
       (index + 1).toString(),
       user.participantId,
-      `${Math.round(user.score * 100) / 100}/${user.totalMarks ? Math.round(user.totalMarks * 100) / 100 : user.totalQuestions}`,
+      `${Math.round(user.score * 100) / 100}/${
+        user.totalMarks
+          ? Math.round(user.totalMarks * 100) / 100
+          : user.totalQuestions
+      }`,
       `${user.percentage}%`,
       user.passed ? "Pass" : "Fail",
       user.totalAttempts.toString(),
@@ -488,7 +496,9 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       index + 1,
       user.participantId,
       Math.round(user.score * 100) / 100,
-      user.totalMarks ? Math.round(user.totalMarks * 100) / 100 : user.totalQuestions,
+      user.totalMarks
+        ? Math.round(user.totalMarks * 100) / 100
+        : user.totalQuestions,
       `${user.percentage}%`,
       user.passed ? "Pass" : "Fail",
       user.totalAttempts,
@@ -510,17 +520,24 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       "Completed At",
       "Duration (min)",
     ];
-    const detailedData = attemptList.map((attempt) => [
-      attempt.participantId,
-      attempt.attemptNumber,
-      attempt.score,
-      attempt.totalQuestions,
-      `${attempt.percentage}%`,
-      attempt.passed ? "Pass" : "Fail",
-      new Date(attempt.startedAt).toLocaleString(),
-      new Date(attempt.completedAt).toLocaleString(),
-      attempt.durationMinutes || 0,
-    ]);
+    const detailedData = attemptList.map((attempt) => {
+      const pct = Number.isFinite(attempt.percentage)
+        ? Math.round(attempt.percentage)
+        : attempt.totalQuestions
+        ? Math.round((attempt.score * 100) / attempt.totalQuestions)
+        : 0;
+      return [
+        attempt.participantId,
+        attempt.attemptNumber,
+        attempt.score,
+        attempt.totalQuestions,
+        `${pct}%`,
+        pct >= 70 ? "Pass" : "Fail", // Match report pass/fail threshold (70%)
+        new Date(attempt.startedAt).toLocaleString(),
+        new Date(attempt.completedAt).toLocaleString(),
+        attempt.durationMinutes || 0,
+      ];
+    });
 
     const detailedWs = XLSX.utils.aoa_to_sheet([
       detailedHeaders,
@@ -568,7 +585,8 @@ function AssessmentResultsPanel({ assessment, onClose }) {
         ? Math.round((attempt.score * 100) / attempt.totalQuestions)
         : 0;
       scoreSum += pct;
-      if (attempt.passed) passCount += 1;
+      // Match report pass/fail threshold (70%)
+      if (pct >= 70) passCount += 1;
     });
     const avgScore = Math.round(scoreSum / attemptList.length);
     const passRate = Math.round((passCount / attemptList.length) * 100);
@@ -647,13 +665,21 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       questionPerformances.length > 0 ? questionPerformances : legacyAnswers;
 
     // Calculate report metrics (same as renderAssessmentReport)
-    const totalQuestions = attempt.totalQuestions || answers.length || 0;
+    // Prioritize attempt.totalQuestions, then assessment.questionCount, then answers.length
+    // Ensure totalQuestions is a count (integer), not marks
+    let totalQuestions =
+      attempt.totalQuestions ||
+      assessment?.questionCount ||
+      answers.length ||
+      0;
+    // Validate: ensure it's a number and not accidentally maxMarks
+    totalQuestions = Math.max(0, Math.round(Number(totalQuestions) || 0));
     const score = attempt.score || 0;
-    
+
     // Use totalMarks from backend if available, otherwise calculate from answers
     let totalMarks = 0;
     let maxMarks = attempt.totalMarks || 0; // Use backend totalMarks if available
-    
+
     let negativeMarks = 0;
     let correctCount = 0;
     let partiallyCorrectCount = 0;
@@ -669,6 +695,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     }
 
     // Calculate total marks earned and counts
+    let answeredQuestionsCount = 0;
     answers.forEach((answer) => {
       const isStructured =
         answer.questionType === "structured" ||
@@ -677,50 +704,74 @@ function AssessmentResultsPanel({ assessment, onClose }) {
         (Array.isArray(answer.options) && answer.options.length === 0);
 
       if (isStructured) {
-        if (answer.awardedMarks !== null && answer.awardedMarks !== undefined) {
+        // Check if structured question has an answer (structuredAnswer) or has been graded (awardedMarks)
+        const hasStructuredAnswer =
+          answer.structuredAnswer && answer.structuredAnswer.trim() !== "";
+        const hasAwardedMarks =
+          answer.awardedMarks !== null && answer.awardedMarks !== undefined;
+
+        if (hasAwardedMarks) {
           totalMarks += answer.awardedMarks;
+          answeredQuestionsCount++;
           if (
             answer.awardedMarks > 0 &&
             answer.awardedMarks < (answer.maxMarks || answer.questionMarks || 0)
           ) {
             partiallyCorrectCount++;
-          } else if (answer.awardedMarks >= (answer.maxMarks || answer.questionMarks || 0)) {
+          } else if (
+            answer.awardedMarks >=
+            (answer.maxMarks || answer.questionMarks || 0)
+          ) {
             correctCount++;
           } else {
             incorrectCount++;
           }
-        } else {
-          unansweredCount++;
+        } else if (hasStructuredAnswer) {
+          // Has answer but not yet graded - count as answered
+          answeredQuestionsCount++;
         }
       } else {
         const isCorrect =
           answer.isCorrect ||
           (answer.selectedOptionId !== null &&
             answer.selectedOptionId === answer.correctOptionId);
-        
+
         const questionMarks = answer.questionMarks || answer.maxMarks || 1.0;
 
         if (
-          answer.selectedOptionId === null ||
-          answer.selectedOptionId === undefined
+          answer.selectedOptionId !== null &&
+          answer.selectedOptionId !== undefined
         ) {
-          unansweredCount++;
-        } else if (isCorrect) {
-          correctCount++;
-          totalMarks += questionMarks; // Use actual question marks, not hardcoded 1
-        } else {
-          incorrectCount++;
-          negativeMarks += 0.25;
+          answeredQuestionsCount++;
+          if (isCorrect) {
+            correctCount++;
+            totalMarks += questionMarks; // Use actual question marks, not hardcoded 1
+          } else {
+            incorrectCount++;
+            negativeMarks += 0.25;
+          }
         }
       }
     });
+
+    // Calculate unanswered as total questions minus answered questions
+    // Ensure totalQuestions is a valid integer count (not marks)
+    const validTotalQuestions = Math.max(
+      0,
+      Math.round(Number(totalQuestions) || 0)
+    );
+    const validAnsweredCount = Math.max(
+      0,
+      Math.round(Number(answeredQuestionsCount) || 0)
+    );
+    // Ensure unansweredCount is never negative and is a valid integer count
+    unansweredCount = Math.max(0, validTotalQuestions - validAnsweredCount);
 
     // Calculate percentage using total marks, not question count
     const percentage =
       attempt.percentage ||
       (maxMarks > 0 ? Math.round((totalMarks / maxMarks) * 100) : 0);
-    const passFail =
-      percentage >= (assessment.passingScore || 50) ? "Pass" : "Fail";
+    const passFail = percentage >= 70 ? "Pass" : "Fail";
 
     const timeTaken = attempt.durationSeconds
       ? formatDuration(attempt.durationSeconds)
@@ -734,6 +785,14 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       : attempt.createdAt
       ? formatDateTime(attempt.createdAt)
       : "—";
+
+    // Get participant information
+    const participantName =
+      attempt.participantName ||
+      attempt.participant?.fullName ||
+      attempt.participant?.username ||
+      attempt.participantId ||
+      "Unknown User";
 
     // Create PDF
     const doc = new jsPDF();
@@ -803,32 +862,38 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       { align: "center" }
     );
 
+    // Participant information
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Participant: ${participantName}`, 105, 38, { align: "center" });
+
     doc.setFontSize(10);
     doc.setFont("helvetica", "italic");
-    doc.text("Applicable to each competency", 105, 38, { align: "center" });
+    doc.text("Applicable to each competency", 105, 44, { align: "center" });
+
+    // Ensure numeric values are valid
+    const safeScore = Number(score) || 0;
+    const safeMaxMarks = Number(maxMarks) || 0;
+    const safeTimeTaken = timeTaken || "—";
 
     // Report table data
     const tableData = [
       ["1", "Score", `${percentage}%`],
       ["2", "Pass/fail", passFail],
       ["3", "Total number of questions", totalQuestions.toString()],
-      ["4", "Marks", `${totalMarks.toFixed(2)} / ${maxMarks.toFixed(2)}`],
-      [
-        "5",
-        "Negative marks",
-        negativeMarks > 0 ? negativeMarks.toFixed(2) : "0.00",
-      ],
-      ["6", "Time taken", timeTaken],
-      ["7", "Number of correct", correctCount.toString()],
+      ["4", "Marks", `${safeScore.toFixed(2)} / ${safeMaxMarks.toFixed(2)}`],
+      ["5", "Negative marks", "0"],
+      ["6", "Time taken", safeTimeTaken],
+      ["7", "Number of correct", safeScore.toFixed(2)],
       ["8", "Number of partially correct", partiallyCorrectCount.toString()],
-      ["9", "Number incorrect", incorrectCount.toString()],
-      ["10", "Number unanswered", unansweredCount.toString()],
+      ["9", "Number incorrect", (safeMaxMarks - safeScore).toFixed(2)],
+      ["10", "Number unanswered", "0"],
       ["11", "Section-wise summary", "Use present style"],
     ];
 
     // Add table (adjusted startY to account for new header layout)
     autoTable(doc, {
-      startY: 42,
+      startY: 48,
       head: [["Nr", "Item", "Result"]],
       body: tableData,
       theme: "striped",
@@ -890,9 +955,17 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       questionPerformances.length > 0 ? questionPerformances : legacyAnswers;
 
     // Calculate report metrics
-    const totalQuestions = attempt.totalQuestions || answers.length || 0;
+    // Prioritize attempt.totalQuestions, then assessment.questionCount, then answers.length
+    // Ensure totalQuestions is a count (integer), not marks
+    let totalQuestions =
+      attempt.totalQuestions ||
+      assessment?.questionCount ||
+      answers.length ||
+      0;
+    // Validate: ensure it's a number and not accidentally maxMarks
+    totalQuestions = Math.max(0, Math.round(Number(totalQuestions) || 0));
     const score = attempt.score || 0;
-    
+
     // Use totalMarks from backend if available, otherwise calculate from answers
     let totalMarks = 0;
     let maxMarks = attempt.totalMarks || 0; // Use backend totalMarks if available
@@ -913,6 +986,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     }
 
     // Calculate total marks earned and counts
+    let answeredQuestionsCount = 0;
     answers.forEach((answer) => {
       const isStructured =
         answer.questionType === "structured" ||
@@ -921,21 +995,31 @@ function AssessmentResultsPanel({ assessment, onClose }) {
         (Array.isArray(answer.options) && answer.options.length === 0);
 
       if (isStructured) {
-        // For structured questions
-        if (answer.awardedMarks !== null && answer.awardedMarks !== undefined) {
+        // Check if structured question has an answer (structuredAnswer) or has been graded (awardedMarks)
+        const hasStructuredAnswer =
+          answer.structuredAnswer && answer.structuredAnswer.trim() !== "";
+        const hasAwardedMarks =
+          answer.awardedMarks !== null && answer.awardedMarks !== undefined;
+
+        if (hasAwardedMarks) {
           totalMarks += answer.awardedMarks;
+          answeredQuestionsCount++;
           if (
             answer.awardedMarks > 0 &&
             answer.awardedMarks < (answer.maxMarks || answer.questionMarks || 0)
           ) {
             partiallyCorrectCount++;
-          } else if (answer.awardedMarks >= (answer.maxMarks || answer.questionMarks || 0)) {
+          } else if (
+            answer.awardedMarks >=
+            (answer.maxMarks || answer.questionMarks || 0)
+          ) {
             correctCount++;
           } else {
             incorrectCount++;
           }
-        } else {
-          unansweredCount++;
+        } else if (hasStructuredAnswer) {
+          // Has answer but not yet graded - count as answered
+          answeredQuestionsCount++;
         }
       } else {
         // For multiple choice questions
@@ -943,31 +1027,44 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           answer.isCorrect ||
           (answer.selectedOptionId !== null &&
             answer.selectedOptionId === answer.correctOptionId);
-        
+
         const questionMarks = answer.questionMarks || answer.maxMarks || 1.0;
 
         if (
-          answer.selectedOptionId === null ||
-          answer.selectedOptionId === undefined
+          answer.selectedOptionId !== null &&
+          answer.selectedOptionId !== undefined
         ) {
-          unansweredCount++;
-        } else if (isCorrect) {
-          correctCount++;
-          totalMarks += questionMarks; // Use actual question marks, not hardcoded 1
-        } else {
-          incorrectCount++;
-          // Negative marking if applicable (assuming 0.25 negative marks per wrong answer)
-          negativeMarks += 0.25;
+          answeredQuestionsCount++;
+          if (isCorrect) {
+            correctCount++;
+            totalMarks += questionMarks; // Use actual question marks, not hardcoded 1
+          } else {
+            incorrectCount++;
+            // Negative marking if applicable (assuming 0.25 negative marks per wrong answer)
+            negativeMarks += 0.25;
+          }
         }
       }
     });
+
+    // Calculate unanswered as total questions minus answered questions
+    // Ensure totalQuestions is a valid integer count (not marks)
+    const validTotalQuestions = Math.max(
+      0,
+      Math.round(Number(totalQuestions) || 0)
+    );
+    const validAnsweredCount = Math.max(
+      0,
+      Math.round(Number(answeredQuestionsCount) || 0)
+    );
+    // Ensure unansweredCount is never negative and is a valid integer count
+    unansweredCount = Math.max(0, validTotalQuestions - validAnsweredCount);
 
     // Calculate percentage using total marks, not question count
     const percentage =
       attempt.percentage ||
       (maxMarks > 0 ? Math.round((totalMarks / maxMarks) * 100) : 0);
-    const passFail =
-      percentage >= (assessment.passingScore || 50) ? "Pass" : "Fail";
+    const passFail = percentage >= 70 ? "Pass" : "Fail";
 
     const timeTaken = attempt.durationSeconds
       ? formatDuration(attempt.durationSeconds)
@@ -1092,7 +1189,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                 <td className="px-4 py-3 text-sm text-gray-900">4</td>
                 <td className="px-4 py-3 text-sm text-gray-700">Marks</td>
                 <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                  {totalMarks.toFixed(2)} / {maxMarks.toFixed(2)}
+                  {score.toFixed(2)} / {maxMarks.toFixed(2)}
                 </td>
               </tr>
               <tr>
@@ -1101,7 +1198,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                   Negative marks
                 </td>
                 <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                  {negativeMarks > 0 ? negativeMarks.toFixed(2) : "0.00"}
+                  0
                 </td>
               </tr>
               <tr>
@@ -1117,7 +1214,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                   Number of correct
                 </td>
                 <td className="px-4 py-3 text-sm font-semibold text-green-600">
-                  {correctCount}
+                  {score}
                 </td>
               </tr>
               <tr>
@@ -1135,7 +1232,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                   Number incorrect
                 </td>
                 <td className="px-4 py-3 text-sm font-semibold text-red-600">
-                  {incorrectCount}
+                  {(maxMarks - score).toFixed(2)}
                 </td>
               </tr>
               <tr>
@@ -1144,7 +1241,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                   Number unanswered
                 </td>
                 <td className="px-4 py-3 text-sm font-semibold text-gray-600">
-                  {unansweredCount}
+                  0
                 </td>
               </tr>
               <tr>
@@ -1807,7 +1904,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                 e.stopPropagation();
               }}
               role="presentation"
-              style={{ cursor: 'default', pointerEvents: 'auto' }}
+              style={{ cursor: "default", pointerEvents: "auto" }}
             >
               <div>
                 <p className="text-xs uppercase tracking-wide text-gray-500">
@@ -1894,10 +1991,11 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                   : attempt.totalQuestions
                   ? Math.round((attempt.score * 100) / attempt.totalQuestions)
                   : 0;
-                const badgeClass = attempt.passed
+                const passed = percent >= 70; // Match report pass/fail threshold (70%)
+                const badgeClass = passed
                   ? "bg-emerald-50 text-emerald-700"
                   : "bg-rose-50 text-rose-700";
-                const badgeText = attempt.passed ? "Passed" : "Failed";
+                const badgeText = passed ? "Passed" : "Failed";
                 const isExpanded = expandedAttemptId === attempt.id;
                 return (
                   <div key={attempt.id}>
@@ -1939,7 +2037,10 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-semibold text-gray-700">
-                          {Math.round(attempt.score * 100) / 100}/{attempt.totalMarks ? Math.round(attempt.totalMarks * 100) / 100 : attempt.totalQuestions}
+                          {Math.round(attempt.score * 100) / 100}/
+                          {attempt.totalMarks
+                            ? Math.round(attempt.totalMarks * 100) / 100
+                            : attempt.totalQuestions}
                         </span>
                         {isExpanded ? (
                           <ChevronUp className="h-5 w-5 text-gray-400" />
@@ -2039,7 +2140,10 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {Math.round(user.score * 100) / 100}/{user.totalMarks ? Math.round(user.totalMarks * 100) / 100 : user.totalQuestions}
+                            {Math.round(user.score * 100) / 100}/
+                            {user.totalMarks
+                              ? Math.round(user.totalMarks * 100) / 100
+                              : user.totalQuestions}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span
