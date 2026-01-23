@@ -1,8 +1,8 @@
 /* eslint-disable no-lonely-if */
-import React, { useState, useEffect } from 'react';
-import { Menu, BookOpen, LogOut, User, Sun, Moon } from 'lucide-react'; // For mobile menu icon and course icon
-import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../../../../contexts/ThemeContext';
+import React, { useState, useEffect } from "react";
+import { Menu, BookOpen, LogOut, User, Sun, Moon } from "lucide-react"; // For mobile menu icon and course icon
+import { useNavigate } from "react-router-dom";
+import { useTheme } from "../../../../contexts/ThemeContext";
 import {
   useGetCoursesQuery,
   useCreateCourseMutation,
@@ -10,15 +10,21 @@ import {
   useDeleteCourseMutation,
   usePublishCourseMutation,
   useDeactivateCourseMutation,
-} from '../../../../redux/apiSlice';
-import CustomSidebar from './custom-sidebar';
-import DashboardOverview from './tabs/dashboard-overview';
-import ModulesTab from './tabs/modules-tab';
-import LessonsTab from './tabs/lessons-tab';
-import MaterialsTab from './tabs/materials-tab';
-import AssessmentsTab from './tabs/assessments-tab';
-import CourseForm from './forms/course-form';
-import { getToken, getUserInfo, removeToken, isTokenExpired } from '../../../../utils/jwtUtils';
+} from "../../../../redux/apiSlice";
+import CustomSidebar from "./custom-sidebar";
+import DashboardOverview from "./tabs/dashboard-overview";
+import ModulesTab from "./tabs/modules-tab";
+import LessonsTab from "./tabs/lessons-tab";
+import MaterialsTab from "./tabs/materials-tab";
+import AssessmentsTab from "./tabs/assessments-tab";
+import CourseForm from "./forms/course-form";
+import {
+  getToken,
+  getUserInfo,
+  removeToken,
+  isTokenExpired,
+} from "../../../../utils/jwtUtils";
+import LogoutConfirmationModal from "../../../../components/LogoutConfirmationModal";
 
 export default function CourseManagementDashboard() {
   const navigate = useNavigate();
@@ -26,16 +32,21 @@ export default function CourseManagementDashboard() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); // For desktop collapse
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false); // For mobile menu open
   const [currentUser, setCurrentUser] = useState(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // State to manage the overall active view: 'dashboard', 'course-management',
   //  'create-course', 'assessments-hub', 'standalone-assessments'
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState("dashboard");
   // State to manage the active tab when in 'course-management' view
-  const [courseManagementActiveTab, setCourseManagementActiveTab] = useState('modules');
+  const [courseManagementActiveTab, setCourseManagementActiveTab] =
+    useState("modules");
 
   // Courses from API
   const {
-    data: fetchedCourses, isLoading: coursesLoading, isError: coursesError, error: coursesErrorObj,
+    data: fetchedCourses,
+    isLoading: coursesLoading,
+    isError: coursesError,
+    error: coursesErrorObj,
   } = useGetCoursesQuery();
   const [courses, setCourses] = useState([]);
   const [createCourse] = useCreateCourseMutation();
@@ -58,103 +69,156 @@ export default function CourseManagementDashboard() {
   // Dummy data for modules, lessons, materials, assessments, now associated with courses
   const [allModules, setAllModules] = useState([
     {
-      id: 'm1', courseId: 'c1', name: 'Module 1: Intro to Safety', description: 'Overview of safety.',
+      id: "m1",
+      courseId: "c1",
+      name: "Module 1: Intro to Safety",
+      description: "Overview of safety.",
     },
     {
-      id: 'm2', courseId: 'c1', name: 'Module 2: Hazard Control', description: 'Controlling hazards.',
+      id: "m2",
+      courseId: "c1",
+      name: "Module 2: Hazard Control",
+      description: "Controlling hazards.",
     },
     {
-      id: 'm3', courseId: 'c2', name: 'Module A: Emergency Planning', description: 'Planning for emergencies.',
+      id: "m3",
+      courseId: "c2",
+      name: "Module A: Emergency Planning",
+      description: "Planning for emergencies.",
     },
   ]);
   const [allLessons, setAllLessons] = useState([
     {
-      id: 'l1', courseId: 'c1', moduleId: 'm1', name: 'Lesson 1.1: What is Safety?', description: 'Defining safety.', loomVideoUrl: 'https://www.loom.com/share/example1',
+      id: "l1",
+      courseId: "c1",
+      moduleId: "m1",
+      name: "Lesson 1.1: What is Safety?",
+      description: "Defining safety.",
+      loomVideoUrl: "https://www.loom.com/share/example1",
     },
     {
-      id: 'l2', courseId: 'c1', moduleId: 'm1', name: 'Lesson 1.2: Safety Culture', description: 'Building a safety culture.', loomVideoUrl: 'https://www.loom.com/share/example2',
+      id: "l2",
+      courseId: "c1",
+      moduleId: "m1",
+      name: "Lesson 1.2: Safety Culture",
+      description: "Building a safety culture.",
+      loomVideoUrl: "https://www.loom.com/share/example2",
     },
     {
-      id: 'l3', courseId: 'c2', moduleId: 'm3', name: 'Lesson A.1: Evacuation Routes', description: 'Identifying routes.', loomVideoUrl: 'https://www.loom.com/share/example3',
+      id: "l3",
+      courseId: "c2",
+      moduleId: "m3",
+      name: "Lesson A.1: Evacuation Routes",
+      description: "Identifying routes.",
+      loomVideoUrl: "https://www.loom.com/share/example3",
     },
   ]);
   const [allMaterials, setAllMaterials] = useState([
     {
-      id: 'mat1', courseId: 'c1', name: 'Safety Handbook', type: 'Document', url: 'https://example.com/safety-handbook.pdf', description: 'Main safety guide.',
+      id: "mat1",
+      courseId: "c1",
+      name: "Safety Handbook",
+      type: "Document",
+      url: "https://example.com/safety-handbook.pdf",
+      description: "Main safety guide.",
     },
     {
-      id: 'mat2', courseId: 'c2', name: 'Emergency Response Plan', type: 'Document', url: 'https://example.com/erp.pdf', description: 'Detailed ERP.',
+      id: "mat2",
+      courseId: "c2",
+      name: "Emergency Response Plan",
+      type: "Document",
+      url: "https://example.com/erp.pdf",
+      description: "Detailed ERP.",
     },
   ]);
   // Assessments are now fetched via API inside AssessmentsTab
 
   // Non-course assessment categories
-  const [assessmentCategory, setAssessmentCategory] = useState(''); // e.g., 'OJT', 'Proficiency'
+  const [assessmentCategory, setAssessmentCategory] = useState(""); // e.g., 'OJT', 'Proficiency'
 
   // Check authentication and admin access on mount
   useEffect(() => {
     const token = getToken();
     if (!token || isTokenExpired(token)) {
-      navigate('/login', { state: { warning: 'Please login to access this page' } });
+      navigate("/login", {
+        state: { warning: "Please login to access this page" },
+      });
       return;
     }
 
     const userInfo = getUserInfo(token);
     if (userInfo) {
       setCurrentUser(userInfo);
-      
+
       // Check if user is admin - redirect non-admin users to dashboard
       if (!userInfo.isAdmin) {
-        navigate('/dashboard', { state: { warning: 'Access denied. Admin privileges required.' } });
+        navigate("/dashboard", {
+          state: { warning: "Access denied. Admin privileges required." },
+        });
         return;
       }
     } else {
-      navigate('/login', { state: { warning: 'Invalid session. Please login again.' } });
+      navigate("/login", {
+        state: { warning: "Invalid session. Please login again." },
+      });
     }
   }, [navigate]);
 
   // Handle sidebar visibility based on screen size
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 768) { // md breakpoint
+      if (window.innerWidth >= 768) {
+        // md breakpoint
         setIsMobileSidebarOpen(false); // Close mobile sidebar if resizing to desktop
       }
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
     removeToken();
     setCurrentUser(null);
-    navigate('/login', { state: { success: 'Logged out successfully' } });
+    navigate("/login", { state: { success: "Logged out successfully" } });
+    setShowLogoutModal(false);
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   const handleCreateCourse = async (newCourse) => {
     try {
       if (newCourse.id) {
         // Editing existing course
-        await updateCourse({ id: newCourse.id, updates: { ...newCourse } }).unwrap();
+        await updateCourse({
+          id: newCourse.id,
+          updates: { ...newCourse },
+        }).unwrap();
         setEditingCourse(null);
       } else {
         // Creating new course
         await createCourse({ ...newCourse }).unwrap();
       }
-      setCurrentView('dashboard'); // Go back to dashboard after saving
+      setCurrentView("dashboard"); // Go back to dashboard after saving
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('Failed to save course', err);
+      console.error("Failed to save course", err);
     }
   };
 
   const handleCancelCourseForm = () => {
-    setCurrentView('dashboard'); // Go back to dashboard
+    setCurrentView("dashboard"); // Go back to dashboard
     setEditingCourse(null);
   };
 
   const handleEditCourse = (course) => {
     setEditingCourse(course);
-    setCurrentView('create-course');
+    setCurrentView("create-course");
   };
 
   const handleDeleteCourse = async (courseId) => {
@@ -162,7 +226,7 @@ export default function CourseManagementDashboard() {
       await deleteCourse(courseId).unwrap();
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('Failed to delete course', err);
+      console.error("Failed to delete course", err);
     }
   };
 
@@ -171,7 +235,7 @@ export default function CourseManagementDashboard() {
       await publishCourse(courseId).unwrap();
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('Failed to publish course', err);
+      console.error("Failed to publish course", err);
     }
   };
 
@@ -180,7 +244,7 @@ export default function CourseManagementDashboard() {
       await deactivateCourse(courseId).unwrap();
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('Failed to deactivate course', err);
+      console.error("Failed to deactivate course", err);
     }
   };
 
@@ -190,41 +254,41 @@ export default function CourseManagementDashboard() {
       setSelectedCourse(null); // Force showing course selection list
     }
     setCourseManagementActiveTab(tabName);
-    setCurrentView('course-management');
+    setCurrentView("course-management");
     setIsMobileSidebarOpen(false); // Close mobile sidebar on navigation
   };
 
   const handleSelectCourse = (course) => {
     setSelectedCourse(course);
     // courseManagementActiveTab is already set by handleNavigateToTab
-    setCurrentView('course-management');
+    setCurrentView("course-management");
     setIsMobileSidebarOpen(false); // Close mobile sidebar on selection
   };
 
   const handleBackToCourseSelection = () => {
     setSelectedCourse(null);
-    setCurrentView('course-management'); // Go back to course list
+    setCurrentView("course-management"); // Go back to course list
   };
 
   const handleOpenAssessmentsHub = () => {
     setSelectedCourse(null);
-    setAssessmentCategory('');
-    setCurrentView('assessments-hub');
+    setAssessmentCategory("");
+    setCurrentView("assessments-hub");
   };
 
   const handleChooseAssessmentForCourse = () => {
-    setAssessmentCategory('');
-    setCourseManagementActiveTab('assessments');
-    setCurrentView('course-management');
+    setAssessmentCategory("");
+    setCourseManagementActiveTab("assessments");
+    setCurrentView("course-management");
   };
 
   const handleChooseAssessmentStandalone = () => {
-    setAssessmentCategory('');
-    setCurrentView('standalone-assessments');
+    setAssessmentCategory("");
+    setCurrentView("standalone-assessments");
   };
 
   let contentToRender;
-  if (currentView === 'create-course') {
+  if (currentView === "create-course") {
     contentToRender = (
       <CourseForm
         course={editingCourse}
@@ -232,41 +296,69 @@ export default function CourseManagementDashboard() {
         onCancel={handleCancelCourseForm}
       />
     );
-  } else if (currentView === 'dashboard') {
+  } else if (currentView === "dashboard") {
     contentToRender = (
       <DashboardOverview
         courses={courses}
-        onCreateCourseClick={() => setCurrentView('create-course')}
+        onCreateCourseClick={() => setCurrentView("create-course")}
         onEditCourse={handleEditCourse}
         onDeleteCourse={handleDeleteCourse}
         onPublishCourse={handlePublishCourse}
         onDeactivateCourse={handleDeactivateCourse}
-        onNavigateToModulesClick={() => handleNavigateToTab('modules', true)}
-        onNavigateToAssessmentsClick={() => handleNavigateToTab('assessments', true)}
-        onNavigateToMaterialsClick={() => handleNavigateToTab('materials', true)}
+        onNavigateToModulesClick={() => handleNavigateToTab("modules", true)}
+        onNavigateToAssessmentsClick={() =>
+          handleNavigateToTab("assessments", true)
+        }
+        onNavigateToMaterialsClick={() =>
+          handleNavigateToTab("materials", true)
+        }
       />
     );
-  } else if (currentView === 'assessments-hub') {
+  } else if (currentView === "assessments-hub") {
     // First choose course-based or standalone
     contentToRender = (
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-4">Assessments</h2>
-        <p className="text-gray-600 mb-6">Choose how you want to manage assessments.</p>
+        <p className="text-gray-600 mb-6">
+          Choose how you want to manage assessments.
+        </p>
         <div className="flex flex-col sm:flex-row gap-4">
-          <button type="button" onClick={handleChooseAssessmentForCourse} className="flex-1 p-4 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors">For a Course</button>
-          <button type="button" onClick={handleChooseAssessmentStandalone} className="flex-1 p-4 rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors">Standalone (OJT, Proficiency, etc.)</button>
+          <button
+            type="button"
+            onClick={handleChooseAssessmentForCourse}
+            className="flex-1 p-4 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          >
+            For a Course
+          </button>
+          <button
+            type="button"
+            onClick={handleChooseAssessmentStandalone}
+            className="flex-1 p-4 rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors"
+          >
+            Standalone (OJT, Proficiency, etc.)
+          </button>
         </div>
       </div>
     );
-  } else if (currentView === 'standalone-assessments') {
+  } else if (currentView === "standalone-assessments") {
     // Pick category then show assessments tab only
     contentToRender = (
       <div className="bg-white rounded-lg shadow p-6 w-full">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">Standalone Assessments</h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">
+          Standalone Assessments
+        </h2>
         <div className="mb-4">
-          <label htmlFor="assessment-category" className="block text-sm font-medium text-gray-700 mb-1">
+          <label
+            htmlFor="assessment-category"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
             Select Category
-            <select id="assessment-category" value={assessmentCategory} onChange={(e) => setAssessmentCategory(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+            <select
+              id="assessment-category"
+              value={assessmentCategory}
+              onChange={(e) => setAssessmentCategory(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
               <option value="">-- Choose category --</option>
               <option value="OJT">OJT</option>
               <option value="Proficiency">Proficiency</option>
@@ -279,7 +371,12 @@ export default function CourseManagementDashboard() {
         {assessmentCategory && (
           <div className="w-full space-y-6">
             <div className="flex border-b border-gray-200 bg-gray-50">
-              <button type="button" className="py-2 px-4 text-sm font-medium border-b-2 border-blue-600 text-blue-600">Assessments</button>
+              <button
+                type="button"
+                className="py-2 px-4 text-sm font-medium border-b-2 border-blue-600 text-blue-600"
+              >
+                Assessments
+              </button>
             </div>
             <div className="p-4">
               <div className="w-full">
@@ -302,43 +399,58 @@ export default function CourseManagementDashboard() {
         )}
       </div>
     );
-  } else { // currentView === "course-management"
+  } else {
+    // currentView === "course-management"
     if (!selectedCourse) {
       // Display list of courses to select from
       contentToRender = (
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Select a Course to Manage</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">
+            Select a Course to Manage
+          </h2>
           {coursesLoading && (
             <p className="text-gray-600">Loading courses...</p>
           )}
           {coursesError && (
             <p className="text-red-600">
               Failed to load courses
-              {coursesErrorObj?.status ? ` (status ${coursesErrorObj.status})` : ''}
+              {coursesErrorObj?.status
+                ? ` (status ${coursesErrorObj.status})`
+                : ""}
               .
             </p>
           )}
           {!coursesLoading && !coursesError && courses.length === 0 ? (
-            <p className="text-gray-600">No courses created yet. Use &quot;Create New Course&quot; to add one.</p>
-          ) : (!coursesLoading && !coursesError && (
-            <ul className="space-y-3">
-              {courses.map((course) => (
-                <li key={course.id}>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectCourse(course)}
-                    className="flex items-center w-full p-3 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors duration-200 text-left"
-                  >
-                    <BookOpen className="mr-3 h-5 w-5 text-blue-600" />
-                    <div>
-                      <p className="text-lg font-medium text-gray-800">{course.name}</p>
-                      <p className="text-sm text-gray-600">{course.description}</p>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ))}
+            <p className="text-gray-600">
+              No courses created yet. Use &quot;Create New Course&quot; to add
+              one.
+            </p>
+          ) : (
+            !coursesLoading &&
+            !coursesError && (
+              <ul className="space-y-3">
+                {courses.map((course) => (
+                  <li key={course.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCourse(course)}
+                      className="flex items-center w-full p-3 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors duration-200 text-left"
+                    >
+                      <BookOpen className="mr-3 h-5 w-5 text-blue-600" />
+                      <div>
+                        <p className="text-lg font-medium text-gray-800">
+                          {course.name}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          {course.description}
+                        </p>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          )}
         </div>
       );
     } else {
@@ -347,9 +459,7 @@ export default function CourseManagementDashboard() {
         <div className="w-full">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-800">
-              Managing:
-              {' '}
-              {selectedCourse.name}
+              Managing: {selectedCourse.name}
             </h2>
             <button
               type="button"
@@ -362,60 +472,74 @@ export default function CourseManagementDashboard() {
           <div className="flex border-b border-gray-200 bg-gray-50">
             <button
               type="button"
-              className={`py-2 px-4 text-sm font-medium ${courseManagementActiveTab === 'modules' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}
-              onClick={() => setCourseManagementActiveTab('modules')}
+              className={`py-2 px-4 text-sm font-medium ${
+                courseManagementActiveTab === "modules"
+                  ? "border-b-2 border-blue-600 text-blue-600"
+                  : "text-gray-600 hover:text-gray-800"
+              }`}
+              onClick={() => setCourseManagementActiveTab("modules")}
             >
               Modules
             </button>
             <button
               type="button"
-              className={`py-2 px-4 text-sm font-medium ${courseManagementActiveTab === 'lessons' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}
-              onClick={() => setCourseManagementActiveTab('lessons')}
+              className={`py-2 px-4 text-sm font-medium ${
+                courseManagementActiveTab === "lessons"
+                  ? "border-b-2 border-blue-600 text-blue-600"
+                  : "text-gray-600 hover:text-gray-800"
+              }`}
+              onClick={() => setCourseManagementActiveTab("lessons")}
             >
               Lessons
             </button>
             <button
               type="button"
-              className={`py-2 px-4 text-sm font-medium ${courseManagementActiveTab === 'materials' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}
-              onClick={() => setCourseManagementActiveTab('materials')}
+              className={`py-2 px-4 text-sm font-medium ${
+                courseManagementActiveTab === "materials"
+                  ? "border-b-2 border-blue-600 text-blue-600"
+                  : "text-gray-600 hover:text-gray-800"
+              }`}
+              onClick={() => setCourseManagementActiveTab("materials")}
             >
               Materials
             </button>
             <button
               type="button"
-              className={`py-2 px-4 text-sm font-medium ${courseManagementActiveTab === 'assessments' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}
-              onClick={() => setCourseManagementActiveTab('assessments')}
+              className={`py-2 px-4 text-sm font-medium ${
+                courseManagementActiveTab === "assessments"
+                  ? "border-b-2 border-blue-600 text-blue-600"
+                  : "text-gray-600 hover:text-gray-800"
+              }`}
+              onClick={() => setCourseManagementActiveTab("assessments")}
             >
               Assessments
             </button>
           </div>
 
           <div className="p-4">
-            {courseManagementActiveTab === 'modules' && (
+            {courseManagementActiveTab === "modules" && (
               <ModulesTab
                 selectedCourse={selectedCourse}
                 allModules={allModules}
                 setAllModules={setAllModules}
               />
             )}
-            {courseManagementActiveTab === 'lessons' && (
+            {courseManagementActiveTab === "lessons" && (
               <LessonsTab
                 selectedCourse={selectedCourse}
                 allLessons={allLessons}
                 setAllLessons={setAllLessons}
               />
             )}
-            {courseManagementActiveTab === 'materials' && (
+            {courseManagementActiveTab === "materials" && (
               <MaterialsTab
                 selectedCourse={selectedCourse}
                 allMaterials={allMaterials}
                 setAllMaterials={setAllMaterials}
               />
             )}
-            {courseManagementActiveTab === 'assessments' && (
-              <AssessmentsTab
-                selectedCourse={selectedCourse}
-              />
+            {courseManagementActiveTab === "assessments" && (
+              <AssessmentsTab selectedCourse={selectedCourse} />
             )}
           </div>
         </div>
@@ -441,7 +565,7 @@ export default function CourseManagementDashboard() {
         onCloseMobile={() => setIsMobileSidebarOpen(false)} // Callback to close mobile sidebar
         currentView={currentView}
         setCurrentView={(view) => {
-          if (view === 'assessments-hub') handleOpenAssessmentsHub();
+          if (view === "assessments-hub") handleOpenAssessmentsHub();
           else setCurrentView(view);
         }}
         courseManagementActiveTab={courseManagementActiveTab}
@@ -449,8 +573,9 @@ export default function CourseManagementDashboard() {
         setSelectedCourse={setSelectedCourse} // Allow sidebar to reset selected course
       />
 
-      <div className={`flex-1 p-6 transition-all duration-300
-        ${isSidebarCollapsed ? 'md:ml-16' : 'md:ml-64'}
+      <div
+        className={`flex-1 p-6 transition-all duration-300
+        ${isSidebarCollapsed ? "md:ml-16" : "md:ml-64"}
         ml-0 // No margin on mobile, sidebar overlays
         w-full // Base width for small screens
         md:w-[calc(100%-4rem)] md:group-[.sidebar-collapsed]:w-[calc(100%-16rem)] // Adjust width for desktop
@@ -477,11 +602,15 @@ export default function CourseManagementDashboard() {
               <Menu className="h-6 w-6 text-gray-600 dark:text-gray-300" />
             </button>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
-              {currentView === 'dashboard' && 'Admin Dashboard'}
-              {currentView === 'create-course' && 'Create New Course'}
-              {currentView === 'course-management' && (selectedCourse ? `Course Management: ${selectedCourse.name}` : 'Course Management')}
-              {currentView === 'assessments-hub' && 'Assessments'}
-              {currentView === 'standalone-assessments' && 'Standalone Assessments'}
+              {currentView === "dashboard" && "Admin Dashboard"}
+              {currentView === "create-course" && "Create New Course"}
+              {currentView === "course-management" &&
+                (selectedCourse
+                  ? `Course Management: ${selectedCourse.name}`
+                  : "Course Management")}
+              {currentView === "assessments-hub" && "Assessments"}
+              {currentView === "standalone-assessments" &&
+                "Standalone Assessments"}
             </h1>
           </div>
 
@@ -526,6 +655,11 @@ export default function CourseManagementDashboard() {
 
         {contentToRender}
       </div>
+      <LogoutConfirmationModal
+        isOpen={showLogoutModal}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
     </div>
   );
 }
