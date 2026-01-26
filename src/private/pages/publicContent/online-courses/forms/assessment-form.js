@@ -35,6 +35,9 @@ export default function AssessmentForm({
   const [timeLimit, setTimeLimit] = useState(
     assessment?.timeLimit !== undefined ? assessment.timeLimit : 30
   );
+  const [passMark, setPassMark] = useState(
+    assessment?.passMark !== undefined ? assessment.passMark : 70
+  );
   const [questionBank, setQuestionBank] = useState(
     assessment?.questionBank || []
   );
@@ -68,6 +71,11 @@ export default function AssessmentForm({
       setName(assessment.name);
       setDescription(assessment.description);
       setQuestionsToPresent(assessment.questionsToPresent);
+      setShowAnswers(assessment.showAnswers !== undefined ? assessment.showAnswers : true);
+      setMaxRetries(assessment.maxRetries !== undefined ? assessment.maxRetries : 3);
+      setTimingMode(assessment.timingMode || "none");
+      setTimeLimit(assessment.timeLimit !== undefined ? assessment.timeLimit : 30);
+      setPassMark(assessment.passMark !== undefined ? assessment.passMark : 70);
 
       // Load existing questions from API if available, otherwise use assessment.questionBank
       if (existingQuestions.length > 0) {
@@ -95,6 +103,11 @@ export default function AssessmentForm({
       setName("");
       setDescription("");
       setQuestionsToPresent(0);
+      setShowAnswers(true);
+      setMaxRetries(3);
+      setTimingMode("none");
+      setTimeLimit(30);
+      setPassMark(70);
       setQuestionBank([]);
     }
   }, [assessment, existingQuestions]);
@@ -116,6 +129,7 @@ export default function AssessmentForm({
         maxRetries: Number(maxRetries),
         timingMode,
         timeLimit: Number(timeLimit),
+        passMark: Number(passMark),
         course: courseId ? { id: courseId } : null, // null for standalone assessments
       };
 
@@ -421,6 +435,28 @@ export default function AssessmentForm({
                 retries allowed.
               </p>
             </div>
+
+            <div className={formGroupClass}>
+              <span htmlFor="pass-mark" className={labelClass}>
+                Pass Mark (%)
+              </span>
+              <input
+                id="pass-mark"
+                type="number"
+                value={passMark}
+                onChange={(e) =>
+                  setPassMark(Math.max(0, Math.min(100, Number(e.target.value))))
+                }
+                placeholder="e.g., 70"
+                min="0"
+                max="100"
+                step="0.1"
+                className={inputClass}
+              />
+              <p className="text-sm text-gray-500">
+                Minimum percentage score required to pass this assessment. Default: 70%
+              </p>
+            </div>
           </div>
 
           {/* Right Column */}
@@ -633,6 +669,7 @@ AssessmentForm.propTypes = {
     maxRetries: PropTypes.number,
     timingMode: PropTypes.oneOf(["none", "quiz", "question"]),
     timeLimit: PropTypes.number,
+    passMark: PropTypes.number,
     questionBank: PropTypes.arrayOf(
       PropTypes.shape({
         id: PropTypes.string.isRequired,

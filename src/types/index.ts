@@ -119,6 +119,7 @@ export interface CourseAssessment {
   maxRetries: number;
   timingMode: "none" | "quiz" | "question";
   timeLimit: number; // in minutes for quiz mode, seconds for question mode
+  passMark: number; // Pass mark as percentage (e.g., 70 for 70%)
   status: number;
   createdAt: string;
   updatedAt: string;
@@ -202,6 +203,7 @@ export interface AssessmentFormData {
   maxRetries: number;
   timingMode: "none" | "quiz" | "question";
   timeLimit: number;
+  passMark: number; // Pass mark as percentage
   courseId?: number;
 }
 

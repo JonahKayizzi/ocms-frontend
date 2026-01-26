@@ -35,6 +35,7 @@ import {
   useDeleteAssessmentMutation,
   useGetQuizAttemptsByAssessmentQuery,
   useLazyGetQuizAttemptByIdQuery,
+  useRecalculateAssessmentAttemptsMutation,
 } from "../../../../../redux/apiSlice";
 
 export default function AssessmentsTab({
@@ -313,6 +314,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
   });
   const [fetchAttemptDetail] = useLazyGetQuizAttemptByIdQuery();
   const [awardMarks] = useAwardMarksForStructuredQuestionMutation();
+  const [recalculateAttempts, { isLoading: isRecalculating }] = useRecalculateAssessmentAttemptsMutation();
   const [attemptDetails, setAttemptDetails] = useState({});
   const [attemptDetailErrors, setAttemptDetailErrors] = useState({});
   const [loadingAttemptId, setLoadingAttemptId] = useState(null);
@@ -1965,10 +1967,22 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => refetch()}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-semibold"
+                  onClick={async () => {
+                    try {
+                      // First recalculate all attempts based on current pass mark and correct answers
+                      await recalculateAttempts(assessmentId).unwrap();
+                      // Then refetch the updated data
+                      await refetch();
+                    } catch (error) {
+                      console.error("Error recalculating attempts:", error);
+                      // Still try to refetch even if recalculation fails
+                      await refetch();
+                    }
+                  }}
+                  disabled={isRecalculating || isFetching}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Refresh
+                  {isRecalculating ? "Recalculating..." : "Refresh"}
                 </button>
               </div>
             </div>
