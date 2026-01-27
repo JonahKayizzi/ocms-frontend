@@ -138,15 +138,43 @@ export default function AssessmentForm({
       // Save or update assessment
       if (assessment?.id) {
         // Edit existing assessment - only update assessment data, not questions
+        console.log("Updating assessment with data:", assessmentData);
+        console.log("Pass mark being saved:", assessmentData.passMark);
         const result = await updateAssessment({
           id: assessment.id,
           updates: assessmentData,
         }).unwrap();
-        savedAssessment = { ...assessment, ...result };
+        console.log("Assessment update response:", result);
+        console.log("Pass mark in response:", result.passMark);
+        
+        // Warn if passmark is not in the response (backend issue)
+        if (result.passMark === undefined || result.passMark === null) {
+          console.warn("⚠️ WARNING: Pass mark was sent but not returned in response. Backend may not be saving/returning passMark field.");
+          console.warn("Sent passMark:", assessmentData.passMark);
+          console.warn("Response keys:", Object.keys(result));
+          // Still include the passMark we sent in the saved assessment
+          savedAssessment = { ...assessment, ...result, passMark: assessmentData.passMark };
+        } else {
+          savedAssessment = { ...assessment, ...result };
+        }
       } else {
         // Create new assessment
+        console.log("Creating assessment with data:", assessmentData);
+        console.log("Pass mark being saved:", assessmentData.passMark);
         const result = await createAssessment(assessmentData).unwrap();
-        savedAssessment = result;
+        console.log("Assessment create response:", result);
+        console.log("Pass mark in response:", result.passMark);
+        
+        // Warn if passmark is not in the response (backend issue)
+        if (result.passMark === undefined || result.passMark === null) {
+          console.warn("⚠️ WARNING: Pass mark was sent but not returned in response. Backend may not be saving/returning passMark field.");
+          console.warn("Sent passMark:", assessmentData.passMark);
+          console.warn("Response keys:", Object.keys(result));
+          // Still include the passMark we sent in the saved assessment
+          savedAssessment = { ...result, passMark: assessmentData.passMark };
+        } else {
+          savedAssessment = result;
+        }
 
         // Only create questions for new assessments
         await Promise.all(
@@ -197,12 +225,27 @@ export default function AssessmentForm({
         );
       }
 
+      // Verify passmark was saved
+      if (savedAssessment.passMark === undefined || savedAssessment.passMark === null) {
+        console.warn("⚠️ Pass mark may not have been saved. Check backend implementation.");
+        // Show warning to user
+        setError("Assessment saved, but pass mark may not have been stored. Please verify in the database or contact support.");
+      }
+      
       // Call the parent onSave callback with the saved assessment
       onSave(savedAssessment);
     } catch (error) {
       console.error("Error saving assessment:", error);
+      console.error("Error details:", {
+        message: error?.data?.message || error?.message,
+        status: error?.status,
+        data: error?.data
+      });
       // Show error in UI instead of alert
-      setError("Error saving assessment. Please try again.");
+      const errorMessage = error?.data?.message 
+        || error?.message 
+        || "Error saving assessment. Please try again.";
+      setError(errorMessage);
     } finally {
       setIsSaving(false);
     }
