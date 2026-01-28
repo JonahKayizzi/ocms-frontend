@@ -38,6 +38,9 @@ export default function AssessmentForm({
   const [passMark, setPassMark] = useState(
     assessment?.passMark !== undefined ? assessment.passMark : 70
   );
+  const [isAim, setIsAim] = useState(
+    assessment?.isAim !== undefined ? assessment.isAim : false
+  );
   const [questionBank, setQuestionBank] = useState(
     assessment?.questionBank || []
   );
@@ -76,6 +79,7 @@ export default function AssessmentForm({
       setTimingMode(assessment.timingMode || "none");
       setTimeLimit(assessment.timeLimit !== undefined ? assessment.timeLimit : 30);
       setPassMark(assessment.passMark !== undefined ? assessment.passMark : 70);
+      setIsAim(assessment.isAim !== undefined ? assessment.isAim : false);
 
       // Load existing questions from API if available, otherwise use assessment.questionBank
       if (existingQuestions.length > 0) {
@@ -108,6 +112,7 @@ export default function AssessmentForm({
       setTimingMode("none");
       setTimeLimit(30);
       setPassMark(70);
+      setIsAim(false);
       setQuestionBank([]);
     }
   }, [assessment, existingQuestions]);
@@ -130,6 +135,7 @@ export default function AssessmentForm({
         timingMode,
         timeLimit: Number(timeLimit),
         passMark: Number(passMark),
+        isAim: Boolean(isAim),
         course: courseId ? { id: courseId } : null, // null for standalone assessments
       };
 
@@ -140,12 +146,14 @@ export default function AssessmentForm({
         // Edit existing assessment - only update assessment data, not questions
         console.log("Updating assessment with data:", assessmentData);
         console.log("Pass mark being saved:", assessmentData.passMark);
+        console.log("Is AIM being saved:", assessmentData.isAim);
         const result = await updateAssessment({
           id: assessment.id,
           updates: assessmentData,
         }).unwrap();
         console.log("Assessment update response:", result);
         console.log("Pass mark in response:", result.passMark);
+        console.log("Is AIM in response:", result.isAim);
         
         // Warn if passmark is not in the response (backend issue)
         if (result.passMark === undefined || result.passMark === null) {
@@ -161,9 +169,11 @@ export default function AssessmentForm({
         // Create new assessment
         console.log("Creating assessment with data:", assessmentData);
         console.log("Pass mark being saved:", assessmentData.passMark);
+        console.log("Is AIM being saved:", assessmentData.isAim);
         const result = await createAssessment(assessmentData).unwrap();
         console.log("Assessment create response:", result);
         console.log("Pass mark in response:", result.passMark);
+        console.log("Is AIM in response:", result.isAim);
         
         // Warn if passmark is not in the response (backend issue)
         if (result.passMark === undefined || result.passMark === null) {
@@ -499,6 +509,29 @@ export default function AssessmentForm({
               <p className="text-sm text-gray-500">
                 Minimum percentage score required to pass this assessment. Default: 70%
               </p>
+            </div>
+
+            <div className={formGroupClass}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span htmlFor="is-aim" className={labelClass}>
+                    AIM Course
+                  </span>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Enable MANSOPS report generation for this assessment. Only AIM (Aviation Information Management) courses should have this enabled.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    id="is-aim"
+                    type="checkbox"
+                    checked={isAim}
+                    onChange={(e) => setIsAim(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
             </div>
           </div>
 
