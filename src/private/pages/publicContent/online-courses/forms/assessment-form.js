@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, X } from "lucide-react";
 import QuestionForm from "./question-form";
 import {
   useCreateAssessmentMutation,
@@ -48,6 +48,11 @@ export default function AssessmentForm({
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState("all"); // "all", "multiple_choice", "structured"
+  const [filterMandatory, setFilterMandatory] = useState("all"); // "all", "mandatory", "non-mandatory"
+  const [filterHasImage, setFilterHasImage] = useState("all"); // "all", "yes", "no"
+  const [questionOptions, setQuestionOptions] = useState({}); // { questionId: { options: [], correctAnswer: "" } }
 
   // RTK Query mutations
   const [createAssessment] = useCreateAssessmentMutation();
@@ -69,6 +74,55 @@ export default function AssessmentForm({
     [existingQuestionsData]
   );
 
+  // Load options for all questions when questions are loaded
+  useEffect(() => {
+    const loadQuestionOptions = async () => {
+      if (existingQuestions.length === 0) return;
+      
+      const optionsMap = {};
+      await Promise.all(
+        existingQuestions.map(async (q) => {
+          if (q.id && typeof q.id === "number") {
+            try {
+              const response = await fetch(
+                `${
+                  process.env.REACT_APP_API_URL || "http://localhost:8091"
+                }/question-options/question/${q.id}`
+              );
+              if (response.ok) {
+                const options = await response.json();
+                const correctOption = options.find((opt) => opt.isCorrect === true);
+                optionsMap[q.id] = {
+                  options: options,
+                  correctAnswer: correctOption ? correctOption.optionText : "",
+                  optionCount: options.length,
+                };
+              } else {
+                optionsMap[q.id] = {
+                  options: [],
+                  correctAnswer: "",
+                  optionCount: 0,
+                };
+              }
+            } catch (error) {
+              console.error(`Error loading options for question ${q.id}:`, error);
+              optionsMap[q.id] = {
+                options: [],
+                correctAnswer: "",
+                optionCount: 0,
+              };
+            }
+          }
+        })
+      );
+      setQuestionOptions(optionsMap);
+    };
+
+    if (assessment?.id && existingQuestions.length > 0) {
+      loadQuestionOptions();
+    }
+  }, [existingQuestions, assessment?.id]);
+
   useEffect(() => {
     if (assessment) {
       setName(assessment.name);
@@ -87,12 +141,13 @@ export default function AssessmentForm({
         const formattedQuestions = existingQuestions.map((q) => ({
           id: q.id,
           text: q.text,
-          correctAnswer: "", // Will be loaded from options when editing
+          correctAnswer: "", // Will be loaded from options
           optionsToPresent: q.optionsToPresent || 4,
           imageDataUrl: q.imageDataUrl || "",
           optionalAnswers: [], // Options will be loaded when editing individual questions
-          questionType: q.questionType || "MCQ",
-          isMandatory: q.isMandatory !== undefined ? q.isMandatory : false,
+          questionType: q.questionType || (q.type || "multiple_choice"),
+          isMandatory: q.isMandatory !== undefined ? q.isMandatory : (q.mandatory || false),
+          marks: q.marks || null,
         }));
         setQuestionBank(formattedQuestions);
       } else if (
@@ -636,7 +691,7 @@ export default function AssessmentForm({
         <div className="grid gap-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-800">
-              Question Bank ({questionBank.length} questions)
+              Question Bank ({questionBank.length} {questionBank.length === 1 ? "question" : "questions"})
             </h3>
             <div className="flex items-center space-x-4">
               {assessment?.id && (
@@ -657,58 +712,329 @@ export default function AssessmentForm({
               </button>
             </div>
           </div>
-          {questionBank.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className={tableClass}>
-                <thead className={tableHeaderClass}>
-                  <tr>
-                    <th scope="col" className={tableHeadClass}>
-                      Question
-                    </th>
-                    <th scope="col" className={tableHeadClass}>
-                      Correct Answer
-                    </th>
-                    <th scope="col" className={`${tableHeadClass} text-right`}>
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {questionBank.map((q) => (
-                    <tr key={q.id} className="odd:bg-white even:bg-gray-50">
-                      <td className={`${tableCellClass} font-medium`}>
-                        {q.text.substring(0, 50)}
-                        ...
-                      </td>
-                      <td className={tableCellClass}>{q.correctAnswer}</td>
-                      <td className={`${tableCellClass} text-right`}>
-                        <button
-                          type="button"
-                          className={actionButtonClass}
-                          onClick={() => handleEditQuestion(q)}
-                        >
-                          <Edit className="h-4 w-4 text-gray-700" />
-                          <span className="sr-only">Edit Question</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={actionButtonClass}
-                          onClick={() => handleDeleteQuestion(q.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-600" />
-                          <span className="sr-only">Delete Question</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+          {/* Search and Filters */}
+          {questionBank.length > 0 && (
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                {/* Search */}
+                <div className="relative">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Search
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search questions..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm h-[38px]"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Filter by Type */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Question Type
+                  </label>
+                  <select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm h-[38px]"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="multiple_choice">Multiple Choice</option>
+                    <option value="structured">Structured</option>
+                  </select>
+                </div>
+
+                {/* Filter by Mandatory */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Mandatory Status
+                  </label>
+                  <select
+                    value={filterMandatory}
+                    onChange={(e) => setFilterMandatory(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm h-[38px]"
+                  >
+                    <option value="all">All</option>
+                    <option value="mandatory">Mandatory</option>
+                    <option value="non-mandatory">Non-Mandatory</option>
+                  </select>
+                </div>
+
+                {/* Filter by Has Image */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Has Image
+                  </label>
+                  <select
+                    value={filterHasImage}
+                    onChange={(e) => setFilterHasImage(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm h-[38px]"
+                  >
+                    <option value="all">All</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Clear Filters */}
+              {(searchQuery || filterType !== "all" || filterMandatory !== "all" || filterHasImage !== "all") && (
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setFilterType("all");
+                      setFilterMandatory("all");
+                      setFilterHasImage("all");
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                  >
+                    <X className="h-3 w-3" />
+                    Clear Filters
+                  </button>
+                </div>
+              )}
             </div>
-          ) : (
-            <p className="text-gray-500">
-              No questions in the bank yet. Add some!
-            </p>
           )}
+
+          {/* Filtered Questions Table */}
+          {(() => {
+            // Filter questions based on search and filters
+            const filteredQuestions = questionBank.filter((q) => {
+              // Search filter
+              if (searchQuery) {
+                const searchLower = searchQuery.toLowerCase();
+                const questionText = (q.text || "").toLowerCase();
+                const correctAnswer = (questionOptions[q.id]?.correctAnswer || q.correctAnswer || "").toLowerCase();
+                if (!questionText.includes(searchLower) && !correctAnswer.includes(searchLower)) {
+                  return false;
+                }
+              }
+
+              // Type filter
+              if (filterType !== "all") {
+                const questionType = q.questionType || (q.type || "multiple_choice");
+                // Normalize question type: "MCQ" -> "multiple_choice"
+                const normalizedType = questionType === "MCQ" ? "multiple_choice" : questionType;
+                if (filterType === "multiple_choice" && normalizedType !== "multiple_choice") {
+                  return false;
+                }
+                if (filterType === "structured" && normalizedType !== "structured") {
+                  return false;
+                }
+              }
+
+              // Mandatory filter
+              if (filterMandatory !== "all") {
+                const isMandatory = q.isMandatory !== undefined ? q.isMandatory : (q.mandatory || false);
+                if (filterMandatory === "mandatory" && !isMandatory) {
+                  return false;
+                }
+                if (filterMandatory === "non-mandatory" && isMandatory) {
+                  return false;
+                }
+              }
+
+              // Has Image filter
+              if (filterHasImage !== "all") {
+                const hasImage = q.imageDataUrl && q.imageDataUrl.trim() !== "";
+                if (filterHasImage === "yes" && !hasImage) {
+                  return false;
+                }
+                if (filterHasImage === "no" && hasImage) {
+                  return false;
+                }
+              }
+
+              return true;
+            });
+
+            return filteredQuestions.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className={tableClass}>
+                  <thead className={tableHeaderClass}>
+                    <tr>
+                      <th scope="col" className={tableHeadClass}>
+                        Question
+                      </th>
+                      <th scope="col" className={tableHeadClass}>
+                        Type
+                      </th>
+                      <th scope="col" className={tableHeadClass}>
+                        Mandatory
+                      </th>
+                      <th scope="col" className={tableHeadClass}>
+                        Marks
+                      </th>
+                      <th scope="col" className={tableHeadClass}>
+                        Has Image
+                      </th>
+                      <th scope="col" className={tableHeadClass}>
+                        Options
+                      </th>
+                      <th scope="col" className={tableHeadClass}>
+                        Options Presented
+                      </th>
+                      <th scope="col" className={tableHeadClass}>
+                        Correct Answer
+                      </th>
+                      <th scope="col" className={`${tableHeadClass} text-right`}>
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredQuestions.map((q) => {
+                      const rawQuestionType = q.questionType || (q.type || "multiple_choice");
+                      // Normalize question type: "MCQ" -> "multiple_choice"
+                      const questionType = rawQuestionType === "MCQ" ? "multiple_choice" : rawQuestionType;
+                      const isMandatory = q.isMandatory !== undefined ? q.isMandatory : (q.mandatory || false);
+                      const hasImage = q.imageDataUrl && q.imageDataUrl.trim() !== "";
+                      const optionsData = questionOptions[q.id] || { options: [], correctAnswer: "", optionCount: 0 };
+                      const correctAnswer = optionsData.correctAnswer || q.correctAnswer || "";
+                      const optionCount = optionsData.optionCount || (optionsData.options?.length || 0);
+                      const optionsToPresent = q.optionsToPresent || 0;
+                      const marks = q.marks || null;
+
+                      // Strip HTML tags for display
+                      const questionText = q.text || "";
+                      const displayText = questionText.replace(/<[^>]*>/g, "").trim();
+
+                      return (
+                        <tr key={q.id} className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
+                          <td className={`${tableCellClass} font-medium max-w-xs`}>
+                            <div className="truncate" title={displayText}>
+                              {displayText.substring(0, 60)}
+                              {displayText.length > 60 ? "..." : ""}
+                            </div>
+                          </td>
+                          <td className={tableCellClass}>
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                questionType === "structured"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-purple-100 text-purple-800"
+                              }`}
+                            >
+                              {questionType === "structured" ? "Structured" : "Multiple Choice"}
+                            </span>
+                          </td>
+                          <td className={tableCellClass}>
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                isMandatory
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-gray-100 text-gray-800"
+                              }`}
+                            >
+                              {isMandatory ? "Mandatory" : "Non-Mandatory"}
+                            </span>
+                          </td>
+                          <td className={tableCellClass}>
+                            {marks !== null && marks !== undefined ? marks.toFixed(1) : "—"}
+                          </td>
+                          <td className={tableCellClass}>
+                            {hasImage ? (
+                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                Yes
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">No</span>
+                            )}
+                          </td>
+                          <td className={tableCellClass}>
+                            {questionType === "structured" ? (
+                              <span className="text-gray-400">—</span>
+                            ) : (
+                              optionCount
+                            )}
+                          </td>
+                          <td className={tableCellClass}>
+                            {questionType === "structured" ? (
+                              <span className="text-gray-400">—</span>
+                            ) : (
+                              optionsToPresent
+                            )}
+                          </td>
+                          <td className={`${tableCellClass} max-w-xs`}>
+                            {correctAnswer ? (
+                              <div className="truncate" title={correctAnswer}>
+                                {correctAnswer.substring(0, 40)}
+                                {correctAnswer.length > 40 ? "..." : ""}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className={`${tableCellClass} text-right`}>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                className={actionButtonClass}
+                                onClick={() => handleEditQuestion(q)}
+                              >
+                                <Edit className="h-4 w-4 text-gray-700" />
+                                <span className="sr-only">Edit Question</span>
+                              </button>
+                              <button
+                                type="button"
+                                className={actionButtonClass}
+                                onClick={() => handleDeleteQuestion(q.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                                <span className="sr-only">Delete Question</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {filteredQuestions.length < questionBank.length && (
+                  <div className="mt-2 text-sm text-gray-500 text-center">
+                    Showing {filteredQuestions.length} of {questionBank.length} questions
+                  </div>
+                )}
+              </div>
+            ) : questionBank.length > 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p>No questions match your filters.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setFilterType("all");
+                    setFilterMandatory("all");
+                    setFilterHasImage("all");
+                  }}
+                  className="mt-2 text-sm text-blue-600 hover:text-blue-800 underline"
+                >
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              <p className="text-gray-500">
+                No questions in the bank yet. Add some!
+              </p>
+            );
+          })()}
         </div>
 
         <div className={buttonGroupClass}>
