@@ -120,6 +120,7 @@ export interface CourseAssessment {
   timingMode: "none" | "quiz" | "question";
   timeLimit: number; // in minutes for quiz mode, seconds for question mode
   passMark: number; // Pass mark as percentage (e.g., 70 for 70%)
+  isAim?: boolean; // True for AIM courses (MANSOPS reports), false for non-AIM courses
   status: number;
   createdAt: string;
   updatedAt: string;
@@ -204,6 +205,7 @@ export interface AssessmentFormData {
   timingMode: "none" | "quiz" | "question";
   timeLimit: number;
   passMark: number; // Pass mark as percentage
+  isAim?: boolean; // True for AIM courses (MANSOPS reports), false for non-AIM courses
   courseId?: number;
 }
 
