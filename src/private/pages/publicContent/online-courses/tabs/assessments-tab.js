@@ -363,6 +363,9 @@ function AssessmentResultsPanel({ assessment, onClose }) {
 
   // Get pass mark from latest assessment data, default to 70 if not available
   const passMarkThreshold = currentAssessment?.passMark !== undefined ? currentAssessment.passMark : 70;
+  
+  // Check if this is an AIM course (for MANSOPS report)
+  const isAimCourse = currentAssessment?.isAim === true;
 
   // Calculate summarized performance (best attempt per user)
   const summarizedPerformance = useMemo(() => {
@@ -691,8 +694,17 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     },
   ];
 
-  // Export assessment report as PDF
+  // Export assessment report as PDF (MANSOPS report - only for AIM courses)
   const exportReportToPDF = async (attempt) => {
+    // Only allow MANSOPS report for AIM courses
+    if (!isAimCourse) {
+      setNotification({
+        isOpen: true,
+        type: "error",
+        message: "MANSOPS report is only available for AIM courses. This assessment is not marked as an AIM course.",
+      });
+      return;
+    }
     const questionPerformances =
       attemptDetails[attempt.id]?.questionPerformances || [];
     const legacyAnswers =
@@ -985,8 +997,19 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     doc.save(fileName);
   };
 
-  // Render the assessment report based on the template
+  // Render the assessment report based on the template (MANSOPS report - only for AIM courses)
   const renderAssessmentReport = (attempt) => {
+    // Only show MANSOPS report for AIM courses
+    if (!isAimCourse) {
+      return (
+        <div className="bg-white rounded-lg border border-gray-300 shadow-sm mb-6 p-6">
+          <div className="text-center text-gray-500">
+            <p className="text-sm">MANSOPS report is only available for AIM courses.</p>
+            <p className="text-xs mt-2">This assessment is not marked as an AIM course.</p>
+          </div>
+        </div>
+      );
+    }
     const questionPerformances =
       attemptDetails[attempt.id]?.questionPerformances || [];
     const legacyAnswers =
@@ -1170,13 +1193,24 @@ function AssessmentResultsPanel({ assessment, onClose }) {
               </p>
             </div>
             <div className="ml-4">
-              <button
-                onClick={() => exportReportToPDF(attempt)}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export PDF
-              </button>
+              {isAimCourse ? (
+                <button
+                  onClick={() => exportReportToPDF(attempt)}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Export PDF
+                </button>
+              ) : (
+                <button
+                  disabled
+                  className="inline-flex items-center px-4 py-2 bg-gray-400 text-white text-sm font-medium rounded-md cursor-not-allowed opacity-50"
+                  title="MANSOPS report is only available for AIM courses"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Export PDF (AIM only)
+                </button>
+              )}
             </div>
           </div>
         </div>
