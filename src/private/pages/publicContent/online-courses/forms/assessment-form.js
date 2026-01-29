@@ -141,7 +141,7 @@ export default function AssessmentForm({
         const formattedQuestions = existingQuestions.map((q) => ({
           id: q.id,
           text: q.text,
-          correctAnswer: "", // Will be loaded from options
+          correctAnswer: "",
           optionsToPresent: q.optionsToPresent || 4,
           imageDataUrl: q.imageDataUrl || "",
           optionalAnswers: [], // Options will be loaded when editing individual questions
