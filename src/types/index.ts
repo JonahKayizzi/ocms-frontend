@@ -115,6 +115,7 @@ export interface CourseAssessment {
   questionsToPresent: number;
   questionCount: number;
   courseId?: number;
+  category?: string; // For standalone assessments: OJT, Proficiency, Certification, Recurrent, etc.
   showAnswers: boolean;
   maxRetries: number;
   timingMode: "none" | "quiz" | "question";
@@ -207,6 +208,7 @@ export interface AssessmentFormData {
   passMark: number; // Pass mark as percentage
   isAim?: boolean; // True for AIM courses (MANSOPS reports), false for non-AIM courses
   courseId?: number;
+  category?: string; // For standalone assessments: OJT, Proficiency, Certification, Recurrent, etc.
 }
 
 export interface QuestionFormData {

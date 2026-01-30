@@ -203,6 +203,7 @@ export default function AssessmentsTab({
           onSave={handleSaveAssessment}
           onCancel={handleCancelForm}
           courseId={selectedCourse?.id}
+          standaloneCategory={standaloneCategory || filterCategory}
         />
       </div>
     );
