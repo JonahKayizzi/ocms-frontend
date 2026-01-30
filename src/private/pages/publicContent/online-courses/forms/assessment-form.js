@@ -17,6 +17,7 @@ export default function AssessmentForm({
   onSave,
   onCancel,
   courseId,
+  standaloneCategory,
 }) {
   const [name, setName] = useState(assessment?.name || "");
   const [description, setDescription] = useState(assessment?.description || "");
@@ -192,6 +193,9 @@ export default function AssessmentForm({
         passMark: Number(passMark),
         isAim: Boolean(isAim),
         course: courseId ? { id: courseId } : null, // null for standalone assessments
+        ...(courseId == null && standaloneCategory
+          ? { category: standaloneCategory }
+          : {}), // category required for standalone so list filters (e.g. OJT) show the assessment
       };
 
       let savedAssessment;
@@ -1099,6 +1103,6 @@ AssessmentForm.propTypes = {
   }),
   onSave: PropTypes.func.isRequired,
   onCancel: PropTypes.func.isRequired,
-  courseId: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
-    .isRequired,
+  courseId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  standaloneCategory: PropTypes.string,
 };
