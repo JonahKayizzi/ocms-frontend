@@ -141,7 +141,7 @@ export default function AssessmentForm({
         const formattedQuestions = existingQuestions.map((q) => ({
           id: q.id,
           text: q.text,
-          correctAnswer: "",
+          correctAnswer: "", // Will be loaded from options
           optionsToPresent: q.optionsToPresent || 4,
           imageDataUrl: q.imageDataUrl || "",
           optionalAnswers: [], // Options will be loaded when editing individual questions
@@ -387,7 +387,7 @@ export default function AssessmentForm({
     setShowQuestionForm(false);
   };
 
-  const cardClass = "bg-white rounded-lg shadow p-6";
+  const cardClass = "bg-white rounded-lg shadow p-4 md:p-6 w-full min-w-0 max-w-full overflow-hidden";
   const cardHeaderClass = "mb-4";
   const cardTitleClass = "text-2xl font-bold text-gray-800";
   const cardDescriptionClass = "text-gray-600 mt-1";
@@ -424,7 +424,7 @@ export default function AssessmentForm({
   }
 
   return (
-    <div className={cardClass}>
+    <div className={cardClass} style={{ overflowX: "hidden", maxWidth: "100%", minWidth: 0, width: "100%" }}>
       <div className={cardHeaderClass}>
         <h2 className={cardTitleClass}>
           {assessment ? "Edit Assessment" : "Create New Assessment"}
@@ -445,7 +445,7 @@ export default function AssessmentForm({
           </button>
         </div>
       )}
-      <div className="grid gap-6">
+      <div className="grid gap-6 min-w-0" style={{ maxWidth: "100%", overflowX: "hidden" }}>
         <div className={formGroupClass}>
           <span htmlFor="assessment-name" className={labelClass}>
             Assessment Name
@@ -473,9 +473,9 @@ export default function AssessmentForm({
         </div>
 
         {/* Assessment Settings - 2 columns for wide screens */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0">
           {/* Left Column */}
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             <div className={formGroupClass}>
               <span htmlFor="questions-to-present" className={labelClass}>
                 Number of Objective Questions to Present to User
@@ -591,7 +591,7 @@ export default function AssessmentForm({
           </div>
 
           {/* Right Column */}
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             <div className={formGroupClass}>
               <div className="flex items-center justify-between">
                 <div>
@@ -688,12 +688,12 @@ export default function AssessmentForm({
         </div>
 
         {/* Question Bank Section */}
-        <div className="grid gap-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-800">
+        <div className="grid gap-4 min-w-0 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 min-w-0">
+            <h3 className="text-lg font-semibold text-gray-800 shrink-0">
               Question Bank ({questionBank.length} {questionBank.length === 1 ? "question" : "questions"})
             </h3>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
               {assessment?.id && (
                 <button
                   type="button"
@@ -715,8 +715,8 @@ export default function AssessmentForm({
 
           {/* Search and Filters */}
           {questionBank.length > 0 && (
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 min-w-0 overflow-hidden">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end min-w-0">
                 {/* Search */}
                 <div className="relative">
                   <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -866,8 +866,21 @@ export default function AssessmentForm({
             });
 
             return filteredQuestions.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className={tableClass}>
+              <div 
+                className="relative min-w-0 overflow-hidden rounded-lg border border-gray-200"
+                style={{ width: "100%", maxWidth: "100%" }}
+              >
+                <div 
+                  className="overflow-x-auto overflow-y-visible border-0 rounded-lg"
+                  style={{ 
+                    width: "100%",
+                    maxWidth: "100%",
+                    minWidth: 0,
+                    WebkitOverflowScrolling: "touch",
+                    maxHeight: "min(70vh, 600px)"
+                  }}
+                >
+                <table className={tableClass} style={{ width: "max-content", minWidth: "100%", tableLayout: "auto" }}>
                   <thead className={tableHeaderClass}>
                     <tr>
                       <th scope="col" className={tableHeadClass}>
@@ -1007,11 +1020,15 @@ export default function AssessmentForm({
                     })}
                   </tbody>
                 </table>
+                </div>
                 {filteredQuestions.length < questionBank.length && (
                   <div className="mt-2 text-sm text-gray-500 text-center">
                     Showing {filteredQuestions.length} of {questionBank.length} questions
                   </div>
                 )}
+                <p className="mt-2 text-xs text-gray-500 text-center sm:text-left">
+                  Scroll horizontally within the table to see all columns.
+                </p>
               </div>
             ) : questionBank.length > 0 ? (
               <div className="text-center py-8 text-gray-500">
