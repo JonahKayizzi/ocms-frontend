@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
@@ -25,9 +25,7 @@ export default function QuestionCard({
   selectedAnswer,
   onAnswerSelect,
   onNext,
-  onPrevious,
   isLastQuestion,
-  showPrevious,
   questionType, // 'MCQ' or 'structured'
 }) {
   // Detect question type: prioritize prop, then check questionType field, then fallback to options
@@ -42,24 +40,34 @@ export default function QuestionCard({
   const [structuredAnswer, setStructuredAnswer] = useState(
     isStructured && typeof selectedAnswer === "string" ? selectedAnswer : ""
   );
+  const skipNextOnChangeRef = useRef(false);
 
-  // Sync structured answer with selectedAnswer prop
+  // Sync structured answer with selectedAnswer prop (e.g. when navigating back with Previous)
   useEffect(() => {
     if (isStructured) {
       if (typeof selectedAnswer === "string") {
+        skipNextOnChangeRef.current = true;
         setStructuredAnswer(selectedAnswer);
+        // Clear skip after a tick in case ReactQuill doesn't fire onChange when value prop changes
+        const t = setTimeout(() => {
+          skipNextOnChangeRef.current = false;
+        }, 0);
+        return () => clearTimeout(t);
       } else {
         setStructuredAnswer("");
       }
     } else {
-      // Reset structured answer when switching to multiple choice
       setStructuredAnswer("");
     }
-  }, [selectedAnswer, isStructured]);
+  }, [selectedAnswer, isStructured, question?.id]);
 
   const handleStructuredAnswerChange = (value) => {
+    // Ignore onChange fired by ReactQuill when we synced value from parent (e.g. after Previous); keeps parent selectedAnswer intact so Next saves correctly
+    if (skipNextOnChangeRef.current) {
+      skipNextOnChangeRef.current = false;
+      return;
+    }
     setStructuredAnswer(value);
-    // Call onAnswerSelect with the text value for structured questions
     if (onAnswerSelect) {
       onAnswerSelect(value);
     }
@@ -157,15 +165,6 @@ export default function QuestionCard({
               : "Please select an answer"}
           </div>
           <div className="flex items-center gap-3">
-            {showPrevious && (
-              <button
-                type="button"
-                onClick={onPrevious}
-                className="px-4 py-2 font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2"
-              >
-                Previous
-              </button>
-            )}
             <button
               type="button"
               onClick={onNext}
@@ -207,15 +206,11 @@ QuestionCard.propTypes = {
   selectedAnswer: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   onAnswerSelect: PropTypes.func.isRequired,
   onNext: PropTypes.func.isRequired,
-  onPrevious: PropTypes.func,
   isLastQuestion: PropTypes.bool.isRequired,
-  showPrevious: PropTypes.bool,
   questionType: PropTypes.string,
 };
 
 QuestionCard.defaultProps = {
   selectedAnswer: null,
-  onPrevious: undefined,
-  showPrevious: false,
-        questionType: "MCQ",
+  questionType: "MCQ",
 };
