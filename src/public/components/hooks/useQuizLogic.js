@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 
-export default function useQuizLogic(quizData, timingSettings = null) {
-  const [currentQuestion, setCurrentQuestion] = useState(0);
+export default function useQuizLogic(quizData, timingSettings = null, options = {}) {
+  const { initialUserAnswers = null, initialCurrentQuestion = null } = options;
+  const [currentQuestion, setCurrentQuestion] = useState(initialCurrentQuestion ?? 0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
-  const [userAnswers, setUserAnswers] = useState({});
+  const [userAnswers, setUserAnswers] = useState(initialUserAnswers || {});
   const [isQuizCompleted, setIsQuizCompleted] = useState(false);
   const [results, setResults] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -17,8 +18,35 @@ export default function useQuizLogic(quizData, timingSettings = null) {
   const timerRef = useRef(null);
   const quizStartTimeRef = useRef(null);
   const timerStartedRef = useRef(false); // Track if timer has been started for quiz mode
+  const initialRestoreAppliedRef = useRef(false);
 
   const totalQuestions = quizData.length;
+
+  // When resuming, apply initial state once; when switching to no initial (e.g. new attempt), reset
+  useEffect(() => {
+    const hasInitial = initialUserAnswers && Object.keys(initialUserAnswers).length > 0;
+    if (!hasInitial) {
+      if (initialRestoreAppliedRef.current) {
+        setUserAnswers({});
+        setCurrentQuestion(0);
+        setSelectedAnswer(null);
+      }
+      initialRestoreAppliedRef.current = false;
+      return;
+    }
+    if (initialRestoreAppliedRef.current || !quizData.length) return;
+    initialRestoreAppliedRef.current = true;
+    setUserAnswers(initialUserAnswers);
+    const safeIdx = Math.min(
+      initialCurrentQuestion ?? 0,
+      Math.max(0, quizData.length - 1)
+    );
+    setCurrentQuestion(safeIdx);
+    const q = quizData[safeIdx];
+    if (q && q.id in initialUserAnswers) {
+      setSelectedAnswer(initialUserAnswers[q.id]);
+    }
+  }, [initialUserAnswers, initialCurrentQuestion, quizData]);
 
   // Initialize timing settings (only when settings change)
   useEffect(() => {
