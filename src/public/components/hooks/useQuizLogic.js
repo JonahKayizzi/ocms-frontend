@@ -372,9 +372,9 @@ export default function useQuizLogic(quizData, timingSettings = null, options = 
       const prevIndex = currentQuestion - 1;
       setCurrentQuestion(prevIndex);
 
-      // Restore previously selected answer if any
+      // Restore previously selected answer (number for MCQ, string for structured)
       const prevAnswer = userAnswers[quizData[prevIndex].id];
-      setSelectedAnswer(typeof prevAnswer === "number" ? prevAnswer : null);
+      setSelectedAnswer(prevAnswer !== undefined && prevAnswer !== null ? prevAnswer : null);
 
       // If quiz had per-question timer (not allowed here), we'd also reset timer
       if (timingSettings?.timingMode === "quiz") {

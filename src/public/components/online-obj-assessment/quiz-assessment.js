@@ -635,12 +635,6 @@ export default function QuizAssessment() {
                 <li>
                   • You can change your answer before clicking "Next Question"
                 </li>
-                {assessment.timingMode !== "question" && (
-                  <li>
-                    • You can navigate back to previous questions using the
-                    "Previous" button
-                  </li>
-                )}
                 {assessment.timingMode === "quiz" && (
                   <li>
                     • Keep track of the timer - the quiz will auto-submit when
@@ -871,12 +865,11 @@ export default function QuizAssessment() {
       <div className="px-4 pb-4 pt-16">
         <div className="max-w-2xl mx-auto">
           <QuestionCard
+            key={quizData[currentQuestion]?.id}
             question={quizData[currentQuestion]}
             selectedAnswer={selectedAnswer}
             onAnswerSelect={handleAnswerSelect}
             onNext={handleNext}
-            onPrevious={handlePrevious}
-            showPrevious={timingMode !== "question" && currentQuestion > 0}
             isLastQuestion={currentQuestion === totalQuestions - 1}
             questionType={
               quizData[currentQuestion]?.questionType ||
