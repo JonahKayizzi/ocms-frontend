@@ -83,7 +83,6 @@ export default function LoginPage() {
                 return;
             }
 
-            // Fallback: demo-only session if no token returned (dev environments)
             const user = { username, roles: ['USER'], provider } as any;
             localStorage.setItem('ans-sms', JSON.stringify(user));
             sessionStorage.setItem('ans-sms', encrypt(user));
@@ -126,7 +125,6 @@ export default function LoginPage() {
                     )}
                 </div>
 
-                {/* Provider Switch */}
                 <div className="mb-4 grid grid-cols-2 gap-2">
                     <button
                         type="button"
