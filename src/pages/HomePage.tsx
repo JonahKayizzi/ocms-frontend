@@ -94,38 +94,48 @@ const HomePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-blue-100 dark:from-slate-900 dark:via-navy-900 dark:to-slate-800">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-sky-200 dark:border-sky-500/20 shadow-sm">
+      {/* Header - Always white background for logo visibility */}
+      <header className="sticky top-0 z-50 bg-white backdrop-blur-md border-b border-sky-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-sky-400 to-sky-600 p-2.5 rounded-lg shadow-lg shadow-sky-500/30">
-                <Plane className="h-6 w-6 text-white" />
+            <div className="flex items-center gap-4">
+              {/* Logo Container */}
+              <div className="flex-shrink-0 bg-white p-2 rounded-xl shadow-md border border-sky-200 hover:shadow-lg transition-shadow duration-300">
+                <img 
+                  src="/ucaa_logo.png" 
+                  alt="UCAA Logo" 
+                  className="h-12 w-auto object-contain"
+                  onError={(e) => {
+                    // Fallback to alternative logo if ucaa_logo2.png doesn't exist
+                    e.currentTarget.src = "/ucaa_logo.png";
+                  }}
+                />
               </div>
+              {/* Title and Subtitle */}
               <div className="flex flex-col">
-                <h1 className="text-xl font-bold text-slate-800 dark:text-white">
+                <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
                   UCAA - OCMS
                 </h1>
-                <p className="text-xs text-sky-600 dark:text-sky-300">
-                  Staff Online Assessment
+                <p className="text-sm text-sky-600 font-medium">
+                  Staff Online Assessment Platform
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               <button
                 onClick={toggleTheme}
-                className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-all duration-300 border border-sky-200 dark:border-sky-500/20"
+                className="p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-all duration-300 border border-sky-200"
                 aria-label="Toggle theme"
               >
                 {theme === "dark" ? (
-                  <Sun className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
+                  <Sun className="h-5 w-5 text-yellow-500" />
                 ) : (
-                  <Moon className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+                  <Moon className="h-5 w-5 text-slate-600" />
                 )}
               </button>
               <Link
                 to="/login"
-                className="px-6 py-2.5 bg-gradient-to-r from-sky-500 to-sky-600 text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-sky-500/40 transition-all duration-300"
+                className="px-6 py-2.5 bg-gradient-to-r from-sky-500 to-sky-600 text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-sky-500/40 hover:from-sky-600 hover:to-sky-700 transition-all duration-300"
               >
                 Log In
               </Link>
@@ -422,8 +432,15 @@ const HomePage: React.FC = () => {
           <div className="flex flex-col md:flex-row justify-between items-start gap-12 mb-8">
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <div className="bg-gradient-to-br from-sky-500 to-sky-600 p-2 rounded-lg shadow-lg shadow-sky-500/30">
-                  <Plane className="h-5 w-5 text-white" />
+                <div className="flex-shrink-0 bg-white dark:bg-slate-800 p-2 rounded-lg shadow-md border border-sky-200 dark:border-sky-500/30">
+                  <img 
+                    src="/ucaa_logo.png" 
+                    alt="UCAA Logo" 
+                    className="h-10 w-auto object-contain"
+                    onError={(e) => {
+                      e.currentTarget.src = "/ucaa_logo.png";
+                    }}
+                  />
                 </div>
                 <div className="flex flex-col">
                   <h3 className="text-lg font-bold text-slate-800 dark:text-white">
