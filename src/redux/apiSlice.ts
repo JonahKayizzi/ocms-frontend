@@ -128,6 +128,23 @@ export const apiSlice = createApi({
         { type: "AssessmentResult", attemptId },
       ],
     }),
+    recalculateAssessmentAttempts: builder.mutation<
+      {
+        assessmentId: number;
+        assessmentName: string;
+        recalculatedAttempts: number;
+        totalAttempts: number;
+      },
+      number
+    >({
+      query: (assessmentId) => ({
+        url: `/quiz-attempts/assessment/${assessmentId}/recalculate`,
+        method: "POST",
+      }),
+      invalidatesTags: (result, error, assessmentId) => [
+        { type: "AssessmentResult", assessmentId },
+      ],
+    }),
     // Course endpoints
     getCourses: builder.query<Course[], void>({
       query: () => "/courses",
@@ -624,6 +641,7 @@ export const {
   useRecordQuizAnswerMutation,
   useFinishQuizAttemptMutation,
   useAwardMarksForStructuredQuestionMutation,
+  useRecalculateAssessmentAttemptsMutation,
   useGetUserQuizAttemptsQuery,
   useGetQuizAttemptsByAssessmentQuery,
   useGetQuizAttemptByIdQuery,

@@ -26,6 +26,7 @@ import {
   Award,
 } from "lucide-react";
 import AssessmentForm from "../forms/assessment-form";
+import NotificationModal from "../../../../../components/NotificationModal";
 import {
   useGetAssessmentsByCourseQuery,
   useAwardMarksForStructuredQuestionMutation,
@@ -35,6 +36,8 @@ import {
   useDeleteAssessmentMutation,
   useGetQuizAttemptsByAssessmentQuery,
   useLazyGetQuizAttemptByIdQuery,
+  useRecalculateAssessmentAttemptsMutation,
+  useGetAssessmentByIdQuery,
 } from "../../../../../redux/apiSlice";
 
 export default function AssessmentsTab({
@@ -311,8 +314,28 @@ function AssessmentResultsPanel({ assessment, onClose }) {
   } = useGetQuizAttemptsByAssessmentQuery(assessmentId, {
     skip: !assessmentId,
   });
+  // Fetch latest assessment data to get updated pass mark
+  const {
+    data: latestAssessment,
+    refetch: refetchAssessment,
+    isLoading: isLoadingAssessment,
+  } = useGetAssessmentByIdQuery(assessmentId, {
+    skip: !assessmentId,
+  });
+  
+  // Log assessment data changes for debugging
+  useEffect(() => {
+    if (latestAssessment) {
+      console.log("Latest assessment data loaded:", latestAssessment);
+      console.log("Pass mark from latest assessment:", latestAssessment.passMark);
+    }
+  }, [latestAssessment]);
   const [fetchAttemptDetail] = useLazyGetQuizAttemptByIdQuery();
   const [awardMarks] = useAwardMarksForStructuredQuestionMutation();
+  const [recalculateAttempts, { isLoading: isRecalculating }] = useRecalculateAssessmentAttemptsMutation();
+  
+  // Use latest assessment data if available, otherwise fall back to prop
+  const currentAssessment = latestAssessment || assessment;
   const [attemptDetails, setAttemptDetails] = useState({});
   const [attemptDetailErrors, setAttemptDetailErrors] = useState({});
   const [loadingAttemptId, setLoadingAttemptId] = useState(null);
@@ -320,6 +343,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
   const [activeTab, setActiveTab] = useState("detailed"); // "detailed" or "summary"
   const [marksEditing, setMarksEditing] = useState({}); // Track which questions are being edited
   const [marksData, setMarksData] = useState({}); // Store marks input: { attemptId-questionId: { awarded: number, max: number } }
+  const [notification, setNotification] = useState({ isOpen: false, type: "success", message: "" });
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -337,6 +361,9 @@ function AssessmentResultsPanel({ assessment, onClose }) {
   const attemptList = analyticsData?.attempts || [];
   const analytics = analyticsData || {};
 
+  // Get pass mark from latest assessment data, default to 70 if not available
+  const passMarkThreshold = currentAssessment?.passMark !== undefined ? currentAssessment.passMark : 70;
+
   // Calculate summarized performance (best attempt per user)
   const summarizedPerformance = useMemo(() => {
     const userBestAttempts = {};
@@ -349,6 +376,12 @@ function AssessmentResultsPanel({ assessment, onClose }) {
         !userBestAttempts[userId] ||
         percentage > userBestAttempts[userId].percentage
       ) {
+        // Use attempt.passed from backend if available (calculated with correct passMark),
+        // otherwise calculate using assessment's passMark
+        const passed = attempt.passed !== undefined 
+          ? attempt.passed 
+          : percentage >= passMarkThreshold;
+
         userBestAttempts[userId] = {
           participantId: userId,
           bestAttempt: attempt,
@@ -356,7 +389,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
           score: attempt.score,
           totalMarks: attempt.totalMarks || attempt.totalQuestions, // Use totalMarks if available, fallback to totalQuestions
           totalQuestions: attempt.totalQuestions,
-          passed: percentage >= 70, // Match report pass/fail threshold (70%)
+          passed: passed,
           completedAt: attempt.completedAt,
           attemptNumber: attempt.attemptNumber,
           totalAttempts: attemptList.filter((a) => a.participantId === userId)
@@ -368,7 +401,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     return Object.values(userBestAttempts).sort(
       (a, b) => b.percentage - a.percentage
     );
-  }, [attemptList]);
+  }, [attemptList, passMarkThreshold]);
 
   // Export functions
   const exportToPDF = () => {
@@ -377,12 +410,12 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     // Title
     doc.setFontSize(18);
     doc.setFont(undefined, "bold");
-    doc.text(`Assessment Results: ${assessment?.name || "Assessment"}`, 14, 20);
+    doc.text(`Assessment Results: ${currentAssessment?.name || "Assessment"}`, 14, 20);
 
     // Assessment info
     doc.setFontSize(12);
     doc.setFont(undefined, "normal");
-    doc.text(`Assessment: ${assessment?.name || "N/A"}`, 14, 35);
+    doc.text(`Assessment: ${currentAssessment?.name || "N/A"}`, 14, 35);
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 45);
 
     // Statistics
@@ -468,7 +501,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     const statsData = [
       ["Assessment Results Report"],
       [""],
-      ["Assessment:", assessment?.name || "N/A"],
+      ["Assessment:", currentAssessment?.name || "N/A"],
       ["Generated:", new Date().toLocaleDateString()],
       [""],
       ["Overall Statistics"],
@@ -532,7 +565,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
         attempt.score,
         attempt.totalQuestions,
         `${pct}%`,
-        pct >= 70 ? "Pass" : "Fail", // Match report pass/fail threshold (70%)
+        pct >= passMarkThreshold ? "Pass" : "Fail",
         new Date(attempt.startedAt).toLocaleString(),
         new Date(attempt.completedAt).toLocaleString(),
         attempt.durationMinutes || 0,
@@ -585,8 +618,11 @@ function AssessmentResultsPanel({ assessment, onClose }) {
         ? Math.round((attempt.score * 100) / attempt.totalQuestions)
         : 0;
       scoreSum += pct;
-      // Match report pass/fail threshold (70%)
-      if (pct >= 70) passCount += 1;
+      // Use attempt.passed from backend if available, otherwise calculate using assessment's passMark
+      const passed = attempt.passed !== undefined 
+        ? attempt.passed 
+        : pct >= passMarkThreshold;
+      if (passed) passCount += 1;
     });
     const avgScore = Math.round(scoreSum / attemptList.length);
     const passRate = Math.round((passCount / attemptList.length) * 100);
@@ -596,7 +632,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       avgScore,
       passRate,
     };
-  }, [attemptList, analytics]);
+  }, [attemptList, analytics, passMarkThreshold]);
 
   const handleOverlayClick = (event) => {
     if (event.target === event.currentTarget) onClose();
@@ -665,11 +701,11 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       questionPerformances.length > 0 ? questionPerformances : legacyAnswers;
 
     // Calculate report metrics (same as renderAssessmentReport)
-    // Prioritize attempt.totalQuestions, then assessment.questionCount, then answers.length
+    // Prioritize attempt.totalQuestions, then currentAssessment.questionCount, then answers.length
     // Ensure totalQuestions is a count (integer), not marks
     let totalQuestions =
       attempt.totalQuestions ||
-      assessment?.questionCount ||
+      currentAssessment?.questionCount ||
       answers.length ||
       0;
     // Validate: ensure it's a number and not accidentally maxMarks
@@ -771,7 +807,11 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     const percentage =
       attempt.percentage ||
       (maxMarks > 0 ? Math.round((totalMarks / maxMarks) * 100) : 0);
-    const passFail = percentage >= 70 ? "Pass" : "Fail";
+    // Use attempt.passed from backend if available (calculated with correct passMark),
+    // otherwise calculate using assessment's passMark dynamically
+    const passFail = attempt.passed !== undefined
+      ? (attempt.passed ? "Pass" : "Fail")
+      : (percentage >= passMarkThreshold ? "Pass" : "Fail");
 
     const timeTaken = attempt.durationSeconds
       ? formatDuration(attempt.durationSeconds)
@@ -848,7 +888,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     doc.setFontSize(12);
     doc.setFont("helvetica", "normal");
     doc.text(
-      `Scorecard | ${assessment.name} – ${attemptDate} (${attemptNumber}${
+      `Scorecard | ${currentAssessment.name} – ${attemptDate} (${attemptNumber}${
         attemptNumber === 1
           ? "st"
           : attemptNumber === 2
@@ -938,7 +978,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     }
 
     // Save PDF
-    const fileName = `Assessment_Report_${assessment.name.replace(
+    const fileName = `Assessment_Report_${currentAssessment.name.replace(
       /\s+/g,
       "_"
     )}_${attempt.participantId}_${attemptNumber}.pdf`;
@@ -955,11 +995,11 @@ function AssessmentResultsPanel({ assessment, onClose }) {
       questionPerformances.length > 0 ? questionPerformances : legacyAnswers;
 
     // Calculate report metrics
-    // Prioritize attempt.totalQuestions, then assessment.questionCount, then answers.length
+    // Prioritize attempt.totalQuestions, then currentAssessment.questionCount, then answers.length
     // Ensure totalQuestions is a count (integer), not marks
     let totalQuestions =
       attempt.totalQuestions ||
-      assessment?.questionCount ||
+      currentAssessment?.questionCount ||
       answers.length ||
       0;
     // Validate: ensure it's a number and not accidentally maxMarks
@@ -1064,7 +1104,11 @@ function AssessmentResultsPanel({ assessment, onClose }) {
     const percentage =
       attempt.percentage ||
       (maxMarks > 0 ? Math.round((totalMarks / maxMarks) * 100) : 0);
-    const passFail = percentage >= 70 ? "Pass" : "Fail";
+    // Use attempt.passed from backend if available (calculated with correct passMark),
+    // otherwise calculate using assessment's passMark dynamically
+    const passFail = attempt.passed !== undefined
+      ? (attempt.passed ? "Pass" : "Fail")
+      : (percentage >= passMarkThreshold ? "Pass" : "Fail");
 
     const timeTaken = attempt.durationSeconds
       ? formatDuration(attempt.durationSeconds)
@@ -1111,7 +1155,7 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                 ONLINE KNOWLEDGE/PROFICIENCY ASSESSMENT REPORT
               </h3>
               <p className="text-sm text-gray-600 mt-1 text-center">
-                Scorecard | {assessment.name} – {attemptDate} ({attemptNumber}
+                Scorecard | {currentAssessment.name} – {attemptDate} ({attemptNumber}
                 {attemptNumber === 1
                   ? "st"
                   : attemptNumber === 2
@@ -1965,10 +2009,102 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => refetch()}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-semibold"
+                  onClick={async () => {
+                    try {
+                      // First, refetch the latest assessment data to get updated pass mark
+                      console.log("Refreshing assessment data...");
+                      const assessmentResult = await refetchAssessment();
+                      console.log("Latest assessment data:", assessmentResult.data);
+                      console.log("Current pass mark:", assessmentResult.data?.passMark || passMarkThreshold);
+                      
+                      // Then recalculate all attempts based on current pass mark and correct answers
+                      // This will:
+                      // 1. Fetch new attempts that have been completed and submitted
+                      // 2. Update pass/fail status based on current pass mark (dynamically from database)
+                      // 3. Recalculate scores if questions were edited (correct answers changed or questions removed)
+                      console.log(`Calling recalculation endpoint: /quiz-attempts/assessment/${assessmentId}/recalculate`);
+                      const result = await recalculateAttempts(assessmentId).unwrap();
+                      console.log("Recalculation result:", result);
+                      
+                      // Clear expanded attempts so they reload with fresh data
+                      setExpandedAttemptId(null);
+                      setAttemptDetails({});
+                      
+                      // Then refetch the updated attempts data
+                      await refetch();
+                      
+                      // Show success feedback
+                      if (result?.recalculatedAttempts > 0) {
+                        console.log(`Successfully recalculated ${result.recalculatedAttempts} attempt(s) with pass mark: ${passMarkThreshold}%`);
+                        setNotification({
+                          isOpen: true,
+                          type: "success",
+                          message: `Successfully refreshed results! ${result.recalculatedAttempts} attempt(s) recalculated.`,
+                        });
+                      } else {
+                        setNotification({
+                          isOpen: true,
+                          type: "success",
+                          message: "Results refreshed successfully. No attempts needed recalculation.",
+                        });
+                      }
+                    } catch (error) {
+                      console.error("Error recalculating attempts:", error);
+                      console.error("Error details:", {
+                        status: error?.status,
+                        data: error?.data,
+                        originalStatus: error?.originalStatus,
+                        endpoint: `/quiz-attempts/assessment/${assessmentId}/recalculate`,
+                        fullError: error
+                      });
+                      
+                      // Check if it's a 404 - the endpoint might not exist on backend
+                      const is404 = error?.status === 404 || error?.originalStatus === 404;
+                      
+                      if (is404) {
+                        // If endpoint doesn't exist, just refresh the data without recalculation
+                        console.warn("Recalculation endpoint not found (404). Refreshing data without recalculation.");
+                        await refetch();
+                        await refetchAssessment();
+                        setNotification({
+                          isOpen: true,
+                          type: "info",
+                          message: `Results refreshed successfully.\n\nNote: The recalculation endpoint is not available on the backend. Pass/fail status updates may require backend implementation of the '/quiz-attempts/assessment/${assessmentId}/recalculate' endpoint.`,
+                        });
+                      } else {
+                        // For other errors, show error message
+                        const errorMessage = error?.data?.message 
+                          || error?.error 
+                          || (error?.status 
+                            ? `Server error (${error.status})`
+                            : "Unknown error");
+                        
+                        setNotification({
+                          isOpen: true,
+                          type: "error",
+                          message: `Failed to refresh results: ${errorMessage}\n\nNote: The refresh will still update the display with any new attempts, but recalculation failed.`,
+                        });
+                        // Still try to refetch even if recalculation fails to get any new attempts
+                        await refetch();
+                        await refetchAssessment();
+                      }
+                    }
+                  }}
+                  disabled={isRecalculating || isFetching}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 bg-white border border-blue-300 rounded-md hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Refresh results: Updates with new attempts, recalculates pass/fail based on current pass mark, and updates scores if questions were edited"
                 >
-                  Refresh
+                  {isRecalculating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Recalculating...
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="h-4 w-4" />
+                      Refresh
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -1991,7 +2127,10 @@ function AssessmentResultsPanel({ assessment, onClose }) {
                   : attempt.totalQuestions
                   ? Math.round((attempt.score * 100) / attempt.totalQuestions)
                   : 0;
-                const passed = percent >= 70; // Match report pass/fail threshold (70%)
+                // Use attempt.passed from backend if available, otherwise calculate using assessment's passMark
+                const passed = attempt.passed !== undefined 
+                  ? attempt.passed 
+                  : percent >= passMarkThreshold;
                 const badgeClass = passed
                   ? "bg-emerald-50 text-emerald-700"
                   : "bg-rose-50 text-rose-700";
@@ -2200,11 +2339,11 @@ function AssessmentResultsPanel({ assessment, onClose }) {
               Assessment results
             </p>
             <h3 className="text-2xl font-bold text-gray-900">
-              {assessment?.name}
+              {currentAssessment?.name}
             </h3>
-            {assessment?.description && (
+            {currentAssessment?.description && (
               <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                {assessment.description}
+                {currentAssessment.description}
               </p>
             )}
           </div>
@@ -2219,6 +2358,12 @@ function AssessmentResultsPanel({ assessment, onClose }) {
         </div>
         <div className="flex-1 overflow-y-auto p-6">{bodyContent}</div>
       </div>
+      <NotificationModal
+        isOpen={notification.isOpen}
+        type={notification.type}
+        message={notification.message}
+        onClose={() => setNotification({ ...notification, isOpen: false })}
+      />
     </div>
   );
 }
