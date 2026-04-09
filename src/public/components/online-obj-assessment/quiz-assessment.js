@@ -12,6 +12,7 @@ import {
   useRecordQuizAnswerMutation,
   useFinishQuizAttemptMutation,
   useGetUserQuizAttemptsQuery,
+  useLazyGetQuizAttemptByIdQuery,
 } from "../../../redux/apiSlice";
 import {
   getToken,
@@ -33,10 +34,15 @@ export default function QuizAssessment() {
   const [showIntroduction, setShowIntroduction] = useState(true);
   const { theme, toggleTheme } = useTheme();
   const [attemptId, setAttemptId] = useState(null);
+  const [restoredUserAnswers, setRestoredUserAnswers] = useState(null);
+  const [restoredCurrentQuestion, setRestoredCurrentQuestion] = useState(null);
   const [startAttempt] = useStartQuizAttemptMutation();
   const [recordAnswer] = useRecordQuizAnswerMutation();
   const [finishAttempt] = useFinishQuizAttemptMutation();
+  const [fetchAttemptById] = useLazyGetQuizAttemptByIdQuery();
   const persistedRef = useRef(false);
+  const restoredAttemptRef = useRef(false);
+  const restoredForAttemptIdRef = useRef(null);
 
   // (moved below after useQuizLogic to avoid referencing variables before initialization)
 
@@ -91,6 +97,51 @@ export default function QuizAssessment() {
       document.removeEventListener("visibilitychange", onFocus);
     };
   }, [username, refetchAttempts]);
+
+  // Detect in-progress attempt and restore state (survives refresh, tab close, etc.)
+  useEffect(() => {
+    if (
+      !username ||
+      !assessmentId ||
+      !Array.isArray(userAttempts) ||
+      userAttempts.length === 0
+    )
+      return;
+    const inProgress = userAttempts.find(
+      (a) => a?.quiz?.id === assessmentId && a?.completedAt == null
+    );
+    if (!inProgress?.id) return;
+    if (restoredForAttemptIdRef.current === inProgress.id) return;
+    restoredForAttemptIdRef.current = inProgress.id;
+    (async () => {
+      try {
+        const details = await fetchAttemptById(inProgress.id).unwrap();
+        const performances =
+          details?.questionPerformances || details?.answers || [];
+        const userAnswersMap = {};
+        performances.forEach((p) => {
+          const qId = p.questionId;
+          const isStructured =
+            (p.questionType || "").toLowerCase() === "structured";
+          userAnswersMap[qId] = isStructured
+            ? p.answerText ?? p.structuredAnswer ?? null
+            : p.selectedAnswerId != null
+            ? p.selectedAnswerId
+            : null;
+        });
+        // Use number of answered questions as starting index; hook will clamp to available questions
+        const nextIndex = performances.length;
+        setRestoredUserAnswers(userAnswersMap);
+        setRestoredCurrentQuestion(nextIndex);
+        setAttemptId(inProgress.id);
+        setShowIntroduction(false);
+        restoredAttemptRef.current = true;
+      } catch (_) {
+        restoredForAttemptIdRef.current = null;
+        /* ignore; user can start new attempt */
+      }
+    })();
+  }, [username, assessmentId, userAttempts, fetchAttemptById]);
 
   // Check enrollment if assessment belongs to a course
   const { data: enrollmentData } = useIsEnrolledQuery(
@@ -254,12 +305,49 @@ export default function QuizAssessment() {
     totalTime,
     timingMode,
     handleAnswerSelect,
-    handleNext,
+    handleNext: handleNextBase,
     handlePrevious,
     resetQuiz: resetQuizLogic,
     formatTime,
     startQuiz,
-  } = useQuizLogic(quizData, timingSettings);
+  } = useQuizLogic(quizData, timingSettings, {
+    initialUserAnswers: restoredUserAnswers,
+    initialCurrentQuestion: restoredCurrentQuestion,
+  });
+
+  // When we restored, start the quiz timer (runs after useQuizLogic is initialized)
+  useEffect(() => {
+    if (attemptId && !showIntroduction && restoredAttemptRef.current && startQuiz) {
+      startQuiz();
+      restoredAttemptRef.current = false;
+    }
+  }, [attemptId, showIntroduction, startQuiz]);
+
+  // Persist current answer to backend when moving to next (survives refresh/interruption)
+  const handleNext = async (forceAdvance = false) => {
+    const currentQ = quizData[currentQuestion];
+    if (attemptId && username && currentQ) {
+      const isStructured = currentQ?.questionType === "structured";
+      const hasAnswer = isStructured
+        ? selectedAnswer != null && String(selectedAnswer).trim() !== "" && selectedAnswer !== "<p><br></p>"
+        : selectedAnswer != null && selectedAnswer !== undefined;
+      if (hasAnswer || forceAdvance) {
+        try {
+          await recordAnswer({
+            attemptId,
+            questionId: currentQ.id,
+            answerId: isStructured ? null : selectedAnswer,
+            participantId: username,
+            correct: !isStructured && selectedAnswer === currentQ.correctAnswer,
+            structuredAnswer: isStructured ? (hasAnswer ? selectedAnswer : null) : null,
+          }).unwrap();
+        } catch (_) {
+          /* non-blocking; will retry on finish */
+        }
+      }
+    }
+    handleNextBase(forceAdvance);
+  };
 
   // Persist answers and finalize attempt once when quiz is completed
   useEffect(() => {
@@ -296,6 +384,8 @@ export default function QuizAssessment() {
     resetQuizLogic();
     setShowIntroduction(true);
     setAttemptId(null);
+    setRestoredUserAnswers(null);
+    setRestoredCurrentQuestion(null);
     persistedRef.current = false;
   };
 
@@ -311,6 +401,8 @@ export default function QuizAssessment() {
       return;
     }
     try {
+      setRestoredUserAnswers(null);
+      setRestoredCurrentQuestion(null);
       if (username && assessmentId) {
         const resp = await startAttempt({
           quizId: assessmentId,
@@ -543,12 +635,6 @@ export default function QuizAssessment() {
                 <li>
                   • You can change your answer before clicking "Next Question"
                 </li>
-                {assessment.timingMode !== "question" && (
-                  <li>
-                    • You can navigate back to previous questions using the
-                    "Previous" button
-                  </li>
-                )}
                 {assessment.timingMode === "quiz" && (
                   <li>
                     • Keep track of the timer - the quiz will auto-submit when
@@ -562,7 +648,7 @@ export default function QuizAssessment() {
                   </li>
                 )}
                 <li>• Once you submit, you cannot change your answers</li>
-                <li>• Do not refresh the page while attempting the assessment</li>
+                <li>• Your answers are saved as you go; if you refresh or leave, you can return and resume</li>
                 {assessment.maxRetries > 1 && (
                   <li>
                     • You have {assessment.maxRetries} attempts to complete this
@@ -779,12 +865,11 @@ export default function QuizAssessment() {
       <div className="px-4 pb-4 pt-16">
         <div className="max-w-2xl mx-auto">
           <QuestionCard
+            key={quizData[currentQuestion]?.id}
             question={quizData[currentQuestion]}
             selectedAnswer={selectedAnswer}
             onAnswerSelect={handleAnswerSelect}
             onNext={handleNext}
-            onPrevious={handlePrevious}
-            showPrevious={timingMode !== "question" && currentQuestion > 0}
             isLastQuestion={currentQuestion === totalQuestions - 1}
             questionType={
               quizData[currentQuestion]?.questionType ||
