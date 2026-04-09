@@ -197,12 +197,15 @@ export default function AssessmentsTab({
 
   if (showForm) {
     return (
-      <AssessmentForm
-        assessment={editingAssessment}
-        onSave={handleSaveAssessment}
-        onCancel={handleCancelForm}
-        courseId={selectedCourse?.id}
-      />
+      <div className="w-full min-w-0 max-w-full overflow-x-hidden" style={{ width: "100%", maxWidth: "100%", overflowX: "hidden" }}>
+        <AssessmentForm
+          assessment={editingAssessment}
+          onSave={handleSaveAssessment}
+          onCancel={handleCancelForm}
+          courseId={selectedCourse?.id}
+          standaloneCategory={standaloneCategory || filterCategory}
+        />
+      </div>
     );
   }
 

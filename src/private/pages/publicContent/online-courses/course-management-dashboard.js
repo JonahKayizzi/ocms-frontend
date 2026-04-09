@@ -456,7 +456,7 @@ export default function CourseManagementDashboard() {
     } else {
       // Display tabs for the selected course
       contentToRender = (
-        <div className="w-full">
+        <div className="w-full min-w-0">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-800">
               Managing: {selectedCourse.name}
@@ -516,7 +516,7 @@ export default function CourseManagementDashboard() {
             </button>
           </div>
 
-          <div className="p-4">
+          <div className="p-4 min-w-0">
             {courseManagementActiveTab === "modules" && (
               <ModulesTab
                 selectedCourse={selectedCourse}
@@ -574,7 +574,7 @@ export default function CourseManagementDashboard() {
       />
 
       <div
-        className={`flex-1 p-6 transition-all duration-300
+        className={`flex-1 min-w-0 p-6 transition-all duration-300
         ${isSidebarCollapsed ? "md:ml-16" : "md:ml-64"}
         ml-0 // No margin on mobile, sidebar overlays
         w-full // Base width for small screens
