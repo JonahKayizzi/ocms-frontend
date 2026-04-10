@@ -226,7 +226,7 @@ export default function QuizAssessment() {
         };
       }
 
-      // For multiple choice questions, process options as before
+      // For multiple choice questions, keep option IDs so backend stores actual option PK.
       const allOptions = Array.isArray(question.options)
         ? [...question.options]
         : [];
@@ -235,6 +235,7 @@ export default function QuizAssessment() {
         (opt) => opt && opt.isCorrect === true
       );
       const correctOptionText = correctOption ? correctOption.optionText : "";
+      const correctOptionId = correctOption ? correctOption.id : null;
 
       // Determine how many options to present (min 2, max total options)
       const totalNonEmpty = allOptions.filter(
@@ -254,26 +255,22 @@ export default function QuizAssessment() {
       const picked = [];
       // Always include correct option if available
       if (correctOption && correctOptionText) {
-        picked.push(correctOptionText);
+        picked.push(correctOption);
       }
       // Fill remaining slots with random distractors
       const need = Math.max(0, maxChoices - picked.length);
       const shuffledDistractors = shuffle(distractors)
-        .slice(0, need)
-        .map((o) => o.optionText);
+        .slice(0, need);
       const limitedOptions = [...picked, ...shuffledDistractors];
 
       // Final shuffle so correct answer position is random
       const finalOptions = shuffle(limitedOptions);
-      const correctIndex = finalOptions.findIndex(
-        (t) => t === correctOptionText
-      );
 
       return {
         id: question.id,
         question: question.text,
         options: finalOptions,
-        correctAnswer: correctIndex >= 0 ? correctIndex : 0,
+        correctAnswer: correctOptionId,
         imageDataUrl: question.imageDataUrl || "",
         questionType: "MCQ",
       };

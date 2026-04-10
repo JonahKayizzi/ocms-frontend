@@ -52,7 +52,12 @@ QuestionSummary.propTypes = {
     PropTypes.shape({
       id: PropTypes.number.isRequired,
       question: PropTypes.string.isRequired,
-      options: PropTypes.arrayOf(PropTypes.string).isRequired,
+      options: PropTypes.arrayOf(
+        PropTypes.shape({
+          id: PropTypes.number.isRequired,
+          optionText: PropTypes.string.isRequired,
+        })
+      ).isRequired,
       correctAnswer: PropTypes.number.isRequired,
     }),
   ).isRequired,

@@ -210,16 +210,17 @@ export default function useQuizLogic(quizData, timingSettings = null, options = 
         questionId: question.id,
         question: question.question,
         questionType: question.questionType || "MCQ",
-        selectedAnswerIndex: typeof userAnswer === "number" ? userAnswer : null,
+        selectedAnswerId: typeof userAnswer === "number" ? userAnswer : null,
         selectedAnswerText: isStructured
           ? typeof userAnswer === "string"
             ? userAnswer
             : null
           : typeof userAnswer === "number"
-          ? question.options[userAnswer]
+          ? question.options?.find((opt) => opt.id === userAnswer)?.optionText || null
           : null,
-        correctAnswerIndex: question.correctAnswer,
-        correctAnswerText: question.options?.[question.correctAnswer] || null,
+        correctAnswerId: question.correctAnswer,
+        correctAnswerText:
+          question.options?.find((opt) => opt.id === question.correctAnswer)?.optionText || null,
         isCorrect: isStructured ? false : userAnswer === question.correctAnswer, // Structured questions need manual grading
       };
     });
@@ -337,13 +338,14 @@ export default function useQuizLogic(quizData, timingSettings = null, options = 
         );
       } else {
         console.log(
-          `Selected Answer Index: ${
+          `Selected Answer ID: ${
             hasAnswer ? selectedAnswer : "none (timeout)"
           }`
         );
         if (hasAnswer) {
+          const selectedOption = currentQ.options?.find((opt) => opt.id === selectedAnswer);
           console.log(
-            `Selected Answer Text: "${currentQ.options[selectedAnswer]}"`
+            `Selected Answer Text: "${selectedOption?.optionText || ""}"`
           );
         }
       }

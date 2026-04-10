@@ -93,8 +93,8 @@ export default function QuestionResult({
       ) : (
         <div className="grid gap-2">
           {question.options.map((option, optionIndex) => {
-            const isUserAnswer = userAnswer?.selectedAnswer === optionIndex;
-            const isCorrectAnswer = optionIndex === question.correctAnswer;
+            const isUserAnswer = userAnswer?.selectedAnswer === option.id;
+            const isCorrectAnswer = option.id === question.correctAnswer;
 
             let className = "p-2 rounded border text-sm ";
             if (isCorrectAnswer) {
@@ -111,7 +111,7 @@ export default function QuestionResult({
                 className={className}
               >
                 <div className="flex items-center justify-between">
-                  <span>{option}</span>
+                  <span>{option.optionText}</span>
                   <div className="flex gap-1">
                     {isCorrectAnswer && (
                       <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-green-100 text-green-700 border border-green-200">
@@ -139,7 +139,12 @@ QuestionResult.propTypes = {
     id: PropTypes.number.isRequired,
     question: PropTypes.string.isRequired,
     questionType: PropTypes.string, // 'multiple_choice' or 'structured'
-    options: PropTypes.arrayOf(PropTypes.string),
+    options: PropTypes.arrayOf(
+      PropTypes.shape({
+        id: PropTypes.number.isRequired,
+        optionText: PropTypes.string.isRequired,
+      })
+    ),
     correctAnswer: PropTypes.number,
   }).isRequired,
   questionNumber: PropTypes.number.isRequired,

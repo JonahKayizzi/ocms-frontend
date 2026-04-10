@@ -10,13 +10,13 @@ export default function AnswerOption({
   onSelect,
 }) {
   const handleClick = () => {
-    onSelect(index);
+    onSelect(option.id);
   };
 
   const handleKeyDown = (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onSelect(index);
+      onSelect(option.id);
     }
   };
 
@@ -34,7 +34,7 @@ export default function AnswerOption({
         type="radio"
         id={`option-${questionId}-${index}`}
         name={`quiz-option-${questionId}`}
-        value={index}
+        value={option.id}
         checked={isSelected}
         onChange={handleClick}
         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
@@ -43,14 +43,17 @@ export default function AnswerOption({
         htmlFor={`option-${questionId}-${index}`}
         className="flex-1 cursor-pointer font-medium text-gray-900"
       >
-        {option}
+        {option.optionText}
       </label>
     </div>
   );
 }
 
 AnswerOption.propTypes = {
-  option: PropTypes.string.isRequired,
+  option: PropTypes.shape({
+    id: PropTypes.number.isRequired,
+    optionText: PropTypes.string.isRequired,
+  }).isRequired,
   index: PropTypes.number.isRequired,
   questionId: PropTypes.number.isRequired,
   isSelected: PropTypes.bool.isRequired,

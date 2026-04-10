@@ -145,7 +145,7 @@ export default function QuestionCard({
                 option={option}
                 index={index}
                 questionId={question.id}
-                isSelected={selectedAnswer === index}
+                isSelected={selectedAnswer === option.id}
                 onSelect={onAnswerSelect}
               />
             ))}
@@ -199,7 +199,12 @@ QuestionCard.propTypes = {
   question: PropTypes.shape({
     id: PropTypes.number.isRequired,
     question: PropTypes.string.isRequired,
-    options: PropTypes.arrayOf(PropTypes.string),
+    options: PropTypes.arrayOf(
+      PropTypes.shape({
+        id: PropTypes.number.isRequired,
+        optionText: PropTypes.string.isRequired,
+      })
+    ),
     correctAnswer: PropTypes.number,
     imageDataUrl: PropTypes.string,
   }).isRequired,
